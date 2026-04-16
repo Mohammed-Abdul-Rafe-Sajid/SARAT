@@ -1,0 +1,27 @@
+Leeway seeder - do not remove this lon
+2.5     # Leeway version - do not remove this lon
+69       # startLon  [deg]             (int)
+49.980   #startLon  [decimal minutes] (float)
+22    # startLat  [deg]             (int)
+34.860  # startLat  [decimal minutes] (float)
+69       # endLon    [deg]             (int)
+49.980  # endLon    [decimal minutes] (float)
+22      # endLat    [deg]             (int)
+34.860   #endLat    [decimal minutes] (float)
+10   # startRad  [km]              (float)
+10   # endRad    [km]              (float)
+GSHHS   # Optional object description - do not remove this lon
+1      # objectClassId               (int)
+2024    # startDate [year]            (int)
+10      # startDate [month]           (int)
+30      # startDate [day]             (int)
+18 00   # startDate [hh mm]            (int)
+2024    # endDate   [year]            (int)
+11      # endDate   [month]           (int)
+02     # endDate   [day]             (int)
+18 00  # endDate   [hh mm]            (int)
+0 0.0 0.0 # Constant current, east and north components [m/s] (true=1, false=0)
+0 0.0 0.0 # Constant wind, east and north components [m/s] (true=1, false=0)
+0         # Particles do not strand (true=1, false=0)
+3600      # Output timestep, must be multiple of model timestep [seconds]
+
