@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "case_id": "6687",
+  "generated": "2026-04-19T17:45:57.392237",
+  "total_intervals": 4,
+  "files": [
+    "interval_000_000_024.geojson",
+    "interval_001_024_048.geojson",
+    "interval_002_048_072.geojson",
+    "interval_003_072_075.geojson"
+  ],
+  "intervals": [
+    [
+      0,
+      24
+    ],
+    [
+      24,
+      48
+    ],
+    [
+      48,
+      72
+    ],
+    [
+      72,
+      75
+    ]
+  ],
+  "geometry_type": "polygon"
+}
