@@ -53,7 +53,6 @@ function get_lines(){
 					echo "\"type\":\"MultiPolygon\"," >>${ProbabilitiesJsonFile}
                     echo "\"coordinates\":[[[" >>${ProbabilitiesJsonFile}
 					# Dynamically truncate coordinates up to 6 decimal places
-					# without hardcoded formatting or zero-padding.
 					echo "`awk 'NR >='$x' && NR <='$y' {x=index($1,"."); x=(x?x+6:length($1)); y=index($2,"."); y=(y?y+6:length($2)); print "["substr($1,1,x)","substr($2,1,y)"],"} ' $Hull_Seg | sed '$ s/,$//g'`" >>${ProbabilitiesJsonFile}
                     echo " ]]]},">>${ProbabilitiesJsonFile}
 					echo "\"properties\":{\"confidence\":$pro_val,\"time\":1430391800.0000000}" >>$ProbabilitiesJsonFile
