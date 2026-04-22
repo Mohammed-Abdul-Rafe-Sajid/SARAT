@@ -9,6 +9,15 @@ import json
 import numpy as np
 from scipy.spatial import ConvexHull
 
+
+def truncate(val):
+    """Truncate float to 6 decimal places"""
+    s = str(val)
+    if '.' in s:
+        i = s.find('.')
+        return float(s[:i+7])
+    return float(s)
+
 # ---------------------------------------------------------------------------
 # Helper: Dynamically truncate a coordinate to max 6 decimal places cleanly
 # operating purely on strings to avoid IEEE float auto-rounding artifacts
@@ -65,6 +74,7 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
                 max_lat = max(max_lat, lat_bins[i+1])
                 
                 points_included += 1
+                coords.append([truncate(lon), truncate(lat)])
                 max_prob = max(max_prob, prob_value)
     
     # Need at least 1 point for bounding rectangle
