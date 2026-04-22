@@ -6,30 +6,33 @@ Created on Tue Jan 27 11:37:04 2026
 @author: arkaprava
 """
 
-id_number=6687
-
-# %%####this will be required as input in the form of string [comment to run the code as function]
 import sys
 import os
 import numpy as np
-# path='/home/arkaprava/INCOIS_ARO/SARAT_V3_Visualization/'
+
+if len(sys.argv) > 1:
+    id_number = int(sys.argv[1])
+else:
+    id_number = 6687
+
 path = os.path.dirname(os.path.abspath(__file__))
 
-# inputpath= os.path.join(path, f"case{id_number}/")
-inputpath = os.path.join(path, "case6687")
+if len(sys.argv) > 2:
+    inputpath = sys.argv[2]
+else:
+    inputpath = os.path.join(path, f"case{id_number}")
 
+# Ensure the inputpath is an absolute path
+if not os.path.isabs(inputpath):
+    inputpath = os.path.abspath(inputpath)
 
-# inputpath=f'/home/arkaprava/INCOIS_ARO/may2025/combination3186/case7070_31_24_26_c7052/case{id_number}/'
 sys.path.append(inputpath)
 
-functionpath='/home/arkaprava/INCOIS_ARO/SARAT_V3_Visualization/pyfunc/'
+functionpath = '/home/arkaprava/INCOIS_ARO/SARAT_V3_Visualization/pyfunc/'
 
-
-# outputpath=os.path.join(path, f"case{id_number}/figure/")
 outputpath = os.path.join(inputpath, "figure")
-
-
-# outputpath=f'/home/arkaprava/INCOIS_ARO/may2025/combination3186/case7070_31_24_26_c7052/case{id_number}/figure/'
+if not os.path.exists(outputpath):
+    os.makedirs(outputpath)
 
 
 # sys.path.append(functionpath)
