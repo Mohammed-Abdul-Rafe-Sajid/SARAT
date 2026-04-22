@@ -9,6 +9,19 @@ import json
 import numpy as np
 from scipy.spatial import ConvexHull
 
+# ---------------------------------------------------------------------------
+# Helper: Dynamically truncate a coordinate to max 6 decimal places cleanly
+# operating purely on strings to avoid IEEE float auto-rounding artifacts
+# like "69.832999999..." involuntarily rounding up to 69.833 natively.
+# ---------------------------------------------------------------------------
+def round_coord(value):
+    """Truncate to up to 6 decimal places dynamically."""
+    s = str(value)
+    idx = s.find('.')
+    if idx != -1 and len(s) > idx + 7:
+        s = s[:idx+7]
+    return float(s)
+
 
 def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=0.05):
     """
@@ -64,7 +77,11 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
         # Extract hull vertices (ordered)
         polygon_coords = points[hull.vertices].tolist()
         
-        # Close the polygon
+        # Round every vertex coordinate to 6 decimal places before writing
+        # GeoJSON to avoid unnecessary floating-point noise in the output.
+        polygon_coords = [[round_coord(v[0]), round_coord(v[1])] for v in polygon_coords]
+        
+        # Close the polygon (GeoJSON requires first == last vertex)
         polygon_coords.append(polygon_coords[0])
         
         # Create GeoJSON Feature
@@ -134,7 +151,8 @@ def create_points_geojson(prob_grid, lon_bins, lat_bins, interval_label, thresho
                     },
                     "geometry": {
                         "type": "Point",
-                        "coordinates": [lon, lat]
+                        # Round coordinates to 6 decimal places
+                        "coordinates": [round_coord(lon), round_coord(lat)]
                     }
                 }
                 features.append(feature)
