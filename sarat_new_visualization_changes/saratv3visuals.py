@@ -6,21 +6,38 @@ Created on Tue Jan 27 11:37:04 2026
 @author: arkaprava
 """
 
-id_number=6687
-
-# %%####this will be required as input in the form of string [comment to run the code as function]
 import sys
-import os
 
-# Get current script directory
+import os
+import numpy as np
+
+# -------- CLI + fallback logic --------
+
+if len(sys.argv) >= 2:
+    id_number = int(sys.argv[1])
+else:
+    id_number = 6687
+
+# Base path of script
 base_path = os.path.dirname(os.path.abspath(__file__))
 
-# Set paths dynamically
-inputpath = os.path.join(base_path, f"case{id_number}")
+# Input path (CLI or default)
+if len(sys.argv) >= 3:
+    inputpath = sys.argv[2]
+else:
+    inputpath = os.path.join(base_path, f"case{id_number}")
+
+# Ensure absolute path
+if not os.path.isabs(inputpath):
+    inputpath = os.path.abspath(inputpath)
+
+# Output path
 outputpath = os.path.join(inputpath, "figure")
+if not os.path.exists(outputpath):
+    os.makedirs(outputpath)
 
+# Add to system path
 sys.path.append(inputpath)
-
 import sarat_visuals
 import allin1sarat
 
