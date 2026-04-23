@@ -1,1 +1,0 @@
-Interval,Rect_BottomLeft_Lon,Rect_BottomLeft_Lat,Rect_TopRight_Lon,Rect_TopRight_Lat,Latest_Centroid_Lon,Latest_Centroid_Lat
