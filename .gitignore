@@ -3,9 +3,10 @@ __pycache__/
 *.pyc
 
 # Generated outputs
+sarat_new_visualization_changes/case*/figure/
 *.geojson
 *.pdf
 *.png
 
-# Temp files
+# Logs
 *.log
