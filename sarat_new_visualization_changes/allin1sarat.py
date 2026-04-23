@@ -45,7 +45,7 @@ def run_sarat_analysis(id_number,input_path,num_trajectories=500, interval_size=
     intervals=sarat_visuals.interval(interval_size,trajectory_length)
 
 
-    centroids,max_prob_global,probs,prob_grids=sarat_visuals.prob_centroid(grid_meta,intervals,trajectories)
+    centroids, max_prob_global, prob_grids = sarat_visuals.prob_centroid(grid_meta, intervals, trajectories)
 
     # Return a dictionary of everything so you can access results easily
     # return trajectories,trajectory_length,sighted_positions,beacon_lon,beacon_lat,beacon_time,\
@@ -67,7 +67,6 @@ def run_sarat_analysis(id_number,input_path,num_trajectories=500, interval_size=
             "grid_meta":grid_meta,
             "centroids":centroids,
             "max_prob_global":max_prob_global,
-            "probs":probs,
             "prob_grids":prob_grids,
             "intervals":intervals
             }
@@ -87,11 +86,6 @@ def run_sarat_analysis(id_number,input_path,num_trajectories=500, interval_size=
             "grid_meta":grid_meta,
             "centroids":centroids,
             "max_prob_global":max_prob_global,
-            "probs":probs,
             "prob_grids":prob_grids,
             "intervals":intervals
             }
-    
-        
-
-

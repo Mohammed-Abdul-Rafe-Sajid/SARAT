@@ -144,6 +144,10 @@ def generate_pdf_report(output_path, case_id, intervals, png_prefix="seeding", c
     
     # ===== INTERVAL PAGES =====
     for idx, (start_hour, end_hour) in enumerate(intervals):
+        # Convert to int to avoid float formatting issues (e.g., 12.0 vs 12)
+        start_hour = int(start_hour)
+        end_hour = int(end_hour)
+        
         interval_label = f"{start_hour:03d}-{end_hour:03d}"
         
         # Heading
@@ -154,10 +158,10 @@ def generate_pdf_report(output_path, case_id, intervals, png_prefix="seeding", c
         
         story.append(Spacer(1, 0.1*inch))
         
-        # Look for PNG image
+        # Look for PNG image - use underscores to match generated filenames
         png_patterns = [
             f"{png_prefix}_{start_hour}_{end_hour}.png",
-            f"{png_prefix}_{interval_label}.png",
+            f"{png_prefix}_{start_hour}_{end_hour}.png",  # redundant but explicit
             f"seeding_{idx}.png",
         ]
         

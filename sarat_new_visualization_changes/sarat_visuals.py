@@ -213,31 +213,56 @@ def interval(interval_size,trajectory_length):
         intervals.append((intervals[-1][1], trajectory_length))#it creates [0 24,24 48,48 72,72 75]
     return intervals
 # %% prob and centroid
-def prob_centroid(grid_meta,intervals,trajectories):
-    prob_grids = [] ###initiate two variables, which will be used later
-    max_prob_global = 0##initation
+def prob_centroid(grid_meta, intervals, trajectories):
+    """
+    Calculate probability grids for each interval and compute trajectory centroids.
+    
+    Parameters
+    ----------
+    grid_meta : dict
+        Grid metadata with lat_bins, lon_bins
+    intervals : list of tuples
+        List of (start_hour, end_hour) tuples
+    trajectories : np.ndarray
+        Trajectories array (num_trajectories, time_steps, 2)
+    
+    Returns
+    -------
+    centroids : np.ndarray
+        Centroid positions for all time steps
+    max_prob_global : float
+        Maximum probability across all intervals
+    prob_grids : list of np.ndarray
+        List of probability grids, one per interval
+    """
+    prob_grids = []
+    max_prob_global = 0
+    
+    # Process each interval
     for start, end in intervals:
         # Flatten all active lon/lat points into two long arrays
-        current_data = trajectories[:, start:end, :].reshape(-1, 2)#extract the trajectories coming in that interval
-        valid = current_data[~np.isnan(current_data[:, 0])]#remove the nan values
+        current_data = trajectories[:, start:end, :].reshape(-1, 2)  # extract the trajectories coming in that interval
+        valid = current_data[~np.isnan(current_data[:, 0])]  # remove the nan values
         
-        
-
-
-        # 2. Initialize every grid point with an equal baseline (e.g., 1)
-        # This represents your "Prior" probability
         # Count everything at once
-        counts, _, _ = np.histogram2d(valid[:, 1], valid[:, 0], bins=[grid_meta['lat_bins'], grid_meta['lon_bins']])
-        #calculate the total numbers of coordinates of the lat_bins and lon_bins 
-        #for how many times they appear from each trajectory 
+        counts, _, _ = np.histogram2d(
+            valid[:, 1], 
+            valid[:, 0], 
+            bins=[grid_meta['lat_bins'], grid_meta['lon_bins']]
+        )
+        # calculate the total numbers of coordinates of the lat_bins and lon_bins 
+        # for how many times they appear from each trajectory 
         
         # Convert to percentage
         probs = (counts / counts.sum()) * 100 if counts.sum() > 0 else counts
-        prob_grids.append(probs)#it will change the variable accordingly, which was inititated earlier
-        max_prob_global = max(max_prob_global, np.max(probs))#update the maximum value of the probability
-        centroids = np.nanmean(trajectories, axis=0)# calculate the centroids which will further divided according to the interval in which they will be plotted
-        
-        return centroids,max_prob_global,probs,prob_grids
+        prob_grids.append(probs)  # it will change the variable accordingly, which was initiated earlier
+        max_prob_global = max(max_prob_global, np.max(probs))  # update the maximum value of the probability
+    
+    # Calculate centroids for all time steps (MOVED OUTSIDE LOOP)
+    centroids = np.nanmean(trajectories, axis=0)  # calculate the centroids which will further be divided according to the interval in which they will be plotted
+    
+    # Return AFTER loop completes (CRITICAL FIX)
+    return centroids, max_prob_global, prob_grids
         
 
     
@@ -311,26 +336,31 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
                            extent=[lon_bins[0], lon_bins[-1], lat_bins[0], lat_bins[-1]],
                            norm=Normalize(0, max_prob_global), transform=ccrs.PlateCarree())
 
-            # 4. Currents (Quiver)
-            currentavg=ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
-            u_name = list(currentavg.data_vars)[0] 
-            v_name = list(currentavg.data_vars)[1]
-            
-            u_data=currentavg[u_name]
-            v_data=currentavg[v_name]
+            # 4. Currents (Quiver) - Safe handling for missing ocean current data
+            if ds_hourly is not None:
+                try:
+                    currentavg = ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
+                    u_name = list(currentavg.data_vars)[0] 
+                    v_name = list(currentavg.data_vars)[1]
+                    
+                    u_data=currentavg[u_name]
+                    v_data=currentavg[v_name]
 
-    # Now access them dynamically if there is depth in the current file, which should usually not be there
-            if u_data.ndim == 3 and u_data.shape[0]<10:
-                u_data = u_data.squeeze(dim='DEPTH1_1')
-                v_data = v_data.squeeze(dim='DEPTH1_1')
-            
-            
-            if currentavg is not None and u_data.shape[1]==v_data.shape[1]:
-                q=ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5,::5], scale=10)
-                ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s', labelpos='E')
+                    # Now access them dynamically if there is depth in the current file, which should usually not be there
+                    if u_data.ndim == 3 and u_data.shape[0]<10:
+                        u_data = u_data.squeeze(dim='DEPTH1_1')
+                        v_data = v_data.squeeze(dim='DEPTH1_1')
+                    
+                    if currentavg is not None and u_data.shape[1]==v_data.shape[1]:
+                        q=ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5,::5], scale=10)
+                        ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s', labelpos='E')
+                    else:
+                        q = ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5, :-1:5], scale=10)
+                        ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s', labelpos='E')
+                except Exception as e:
+                    print(f"    ⚠️  Warning: Could not plot currents for interval {start}-{end}: {str(e)}")
             else:
-                q = ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5, :-1:5], scale=10)
-                ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s', labelpos='E')
+                pass  # Skip current plotting - ds_hourly is None
             
             if start < len(centroids) and not np.any(np.isnan(centroids[start])):
                 ax.plot(centroids[start][0], centroids[start][1], 'o', markersize=6, markeredgecolor='black', fillstyle='none', label='Interval Centroids', transform=ccrs.PlateCarree())
@@ -451,27 +481,29 @@ def plot_combined(output_path,id_number,intervals, trajectories, centroids, ds_h
                 ax.plot(beacon_lon[m], beacon_lat[m], 'magenta', lw=1.5, label='final drifter')
 
 
-            # 3. Currents & Centroids
-            currentavg=ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
-            u_name = list(currentavg.data_vars)[0] 
-            v_name = list(currentavg.data_vars)[1]
-            
-            u_data=currentavg[u_name]
-            v_data=currentavg[v_name]
+            # 3. Currents & Centroids - Safe handling for missing ocean current data
+            if ds_hourly is not None:
+                try:
+                    currentavg=ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
+                    u_name = list(currentavg.data_vars)[0] 
+                    v_name = list(currentavg.data_vars)[1]
+                    
+                    u_data=currentavg[u_name]
+                    v_data=currentavg[v_name]
 
-    # Now access them dynamically
-            if u_data.ndim == 3 and u_data.shape[0]<10:
-                u_data = u_data.squeeze(dim='DEPTH1_1')
-                v_data = v_data.squeeze(dim='DEPTH1_1')
-
-            
-            
-            if currentavg is not None and u_data.shape[1]==v_data.shape[1]:
-                q=ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5,::5], scale=10)
-                if idx == 0: ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s')
-            else:
-                q = ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5, :-1:5], scale=10)
-                if idx == 0: ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s')
+                    # Now access them dynamically
+                    if u_data.ndim == 3 and u_data.shape[0]<10:
+                        u_data = u_data.squeeze(dim='DEPTH1_1')
+                        v_data = v_data.squeeze(dim='DEPTH1_1')
+                    
+                    if currentavg is not None and u_data.shape[1]==v_data.shape[1]:
+                        q=ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5,::5], scale=10)
+                        if idx == 0: ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s')
+                    else:
+                        q = ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5, :-1:5], scale=10)
+                        if idx == 0: ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s')
+                except Exception as e:
+                    pass  # Skip current plotting on error
 
             ax.plot(centroids[:end, 0], centroids[:end, 1], 'g-', lw=1, label='Centroid')
             ax.plot(np.nanmean(trajectories[:,0,0]), np.nanmean(trajectories[:,0,1]), 'r*', ms=10)

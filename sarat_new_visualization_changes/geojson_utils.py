@@ -120,6 +120,87 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
         return None
 
 
+def create_grid_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=0.05):
+    """
+    Convert probability grid → individual grid cell polygons FeatureCollection GeoJSON
+    
+    Creates a feature for each grid cell (colored by probability like a heatmap).
+    Each feature is a small rectangular polygon representing one grid cell.
+    
+    Parameters
+    ----------
+    prob_grid : np.ndarray
+        2D probability array (rows=lat, cols=lon)
+    lon_bins : np.ndarray
+        Longitude bin edges
+    lat_bins : np.ndarray
+        Latitude bin edges
+    interval_label : str
+        Interval label (e.g., "0-24h")
+    threshold : float
+        Skip cells below this normalized probability threshold (0-1 scale, default: 0.05)
+    
+    Returns
+    -------
+    dict
+        FeatureCollection with Polygon features (one per grid cell)
+    """
+    
+    features = []
+    
+    # Calculate max probability for normalization
+    max_prob = np.max(prob_grid) if np.max(prob_grid) > 0 else 1.0
+    
+    for i in range(prob_grid.shape[0]):  # lat dimension
+        for j in range(prob_grid.shape[1]):  # lon dimension
+            prob = prob_grid[i, j]
+            
+            # Normalize probability (0–1 scale)
+            norm_prob = prob / max_prob if max_prob > 0 else 0
+            
+            # Filter weak noise - only include cells above threshold
+            if norm_prob < threshold:
+                continue
+            
+            # Get grid cell boundaries
+            min_lon = lon_bins[j]
+            max_lon = lon_bins[j + 1]
+            min_lat = lat_bins[i]
+            max_lat = lat_bins[i + 1]
+            
+            # Create rectangular polygon with 5 points (closed)
+            coords = [
+                [round_coord(min_lon), round_coord(min_lat)],
+                [round_coord(max_lon), round_coord(min_lat)],
+                [round_coord(max_lon), round_coord(max_lat)],
+                [round_coord(min_lon), round_coord(max_lat)],
+                [round_coord(min_lon), round_coord(min_lat)]
+            ]
+            
+            feature = {
+                "type": "Feature",
+                "properties": {
+                    "probability": float(prob),
+                    "normalized_probability": round(float(norm_prob), 4),
+                    "probability_percent": round(float(prob * 100), 2),
+                    "interval": interval_label,
+                    "grid_i": int(i),
+                    "grid_j": int(j)
+                },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [coords]
+                }
+            }
+            
+            features.append(feature)
+    
+    return {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+
 def create_points_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=0.05):
     """
     Convert probability grid → points FeatureCollection GeoJSON
