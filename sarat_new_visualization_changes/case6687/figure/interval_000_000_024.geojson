@@ -1,61 +1,432 @@
 {
-  "type": "Feature",
+  "type": "FeatureCollection",
   "properties": {
     "interval": "0-24h",
     "points_included": 11,
-    "max_probability": 53.8088,
-    "hull_area": 0.12
+    "max_probability": 53.8088
   },
-  "geometry": {
-    "type": "Polygon",
-    "coordinates": [
-      [
-        [
-<<<<<<< HEAD
-          69.649999,
-          22.5
-        ],
-        [
-          69.949999,
-          22.5
-        ],
-        [
-          69.949999,
-          22.7
-        ],
-        [
-          69.749999,
-          22.7
-        ],
-        [
-          69.649999,
-          22.6
-        ],
-        [
-          69.649999,
-          22.5
-=======
-          69.599999,
-          22.45
-        ],
-        [
-          69.999999,
-          22.45
-        ],
-        [
-          69.999999,
-          22.75
-        ],
-        [
-          69.599999,
-          22.75
-        ],
-        [
-          69.599999,
-          22.45
->>>>>>> 5608891ae147b13e95f19954c0e41df621a1f0f9
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "bounding_box",
+        "interval": "0-24h",
+        "points_included": 11,
+        "max_probability": 53.8088,
+        "hull_area": 0.12
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.599999,
+              22.45
+            ],
+            [
+              69.999999,
+              22.45
+            ],
+            [
+              69.999999,
+              22.75
+            ],
+            [
+              69.599999,
+              22.75
+            ],
+            [
+              69.599999,
+              22.45
+            ]
+          ]
         ]
-      ]
-    ]
-  }
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 0.1621,
+        "color": "#fff7fb"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.599999,
+              22.45
+            ],
+            [
+              69.699999,
+              22.45
+            ],
+            [
+              69.699999,
+              22.55
+            ],
+            [
+              69.599999,
+              22.55
+            ],
+            [
+              69.599999,
+              22.45
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 7.3339,
+        "color": "#eae1ef"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.699999,
+              22.45
+            ],
+            [
+              69.799999,
+              22.45
+            ],
+            [
+              69.799999,
+              22.55
+            ],
+            [
+              69.699999,
+              22.55
+            ],
+            [
+              69.699999,
+              22.45
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 13.8979,
+        "color": "#cdd0e5"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.799999,
+              22.45
+            ],
+            [
+              69.899999,
+              22.45
+            ],
+            [
+              69.899999,
+              22.55
+            ],
+            [
+              69.799999,
+              22.55
+            ],
+            [
+              69.799999,
+              22.45
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 0.9319,
+        "color": "#fdf4fa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.899999,
+              22.45
+            ],
+            [
+              69.999999,
+              22.45
+            ],
+            [
+              69.999999,
+              22.55
+            ],
+            [
+              69.899999,
+              22.55
+            ],
+            [
+              69.899999,
+              22.45
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 0.4862,
+        "color": "#fef6fa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.599999,
+              22.55
+            ],
+            [
+              69.699999,
+              22.55
+            ],
+            [
+              69.699999,
+              22.65
+            ],
+            [
+              69.599999,
+              22.65
+            ],
+            [
+              69.599999,
+              22.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 15.0729,
+        "color": "#c6cce3"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.699999,
+              22.55
+            ],
+            [
+              69.799999,
+              22.55
+            ],
+            [
+              69.799999,
+              22.65
+            ],
+            [
+              69.699999,
+              22.65
+            ],
+            [
+              69.699999,
+              22.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 53.8088,
+        "color": "#014636"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.799999,
+              22.55
+            ],
+            [
+              69.899999,
+              22.55
+            ],
+            [
+              69.899999,
+              22.65
+            ],
+            [
+              69.799999,
+              22.65
+            ],
+            [
+              69.799999,
+              22.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 4.4976,
+        "color": "#f2e9f4"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.899999,
+              22.55
+            ],
+            [
+              69.999999,
+              22.55
+            ],
+            [
+              69.999999,
+              22.65
+            ],
+            [
+              69.899999,
+              22.65
+            ],
+            [
+              69.899999,
+              22.55
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 0.8914,
+        "color": "#fdf4fa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.699999,
+              22.65
+            ],
+            [
+              69.799999,
+              22.65
+            ],
+            [
+              69.799999,
+              22.75
+            ],
+            [
+              69.699999,
+              22.75
+            ],
+            [
+              69.699999,
+              22.65
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 2.7147,
+        "color": "#f8eff7"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.799999,
+              22.65
+            ],
+            [
+              69.899999,
+              22.65
+            ],
+            [
+              69.899999,
+              22.75
+            ],
+            [
+              69.799999,
+              22.75
+            ],
+            [
+              69.799999,
+              22.65
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "grid_cell",
+        "probability": 0.2026,
+        "color": "#fff7fb"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              69.899999,
+              22.65
+            ],
+            [
+              69.999999,
+              22.65
+            ],
+            [
+              69.999999,
+              22.75
+            ],
+            [
+              69.899999,
+              22.75
+            ],
+            [
+              69.899999,
+              22.65
+            ]
+          ]
+        ]
+      }
+    }
+  ]
 }

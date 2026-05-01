@@ -237,7 +237,7 @@ def prob_centroid(grid_meta,intervals,trajectories):
         max_prob_global = max(max_prob_global, np.max(probs))#update the maximum value of the probability
         centroids = np.nanmean(trajectories, axis=0)# calculate the centroids which will further divided according to the interval in which they will be plotted
         
-        return centroids,max_prob_global,probs,prob_grids
+    return centroids,max_prob_global,probs,prob_grids
         
 
     
@@ -347,6 +347,32 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
             rw, rh = lon_bins[x_max+1] - rx, lat_bins[y_max+1] - ry
             ax.add_patch(Rectangle((rx, ry), rw, rh, fill=False, edgecolor='blue', ls='--'))
             
+            # --- Dynamic Grid Lines based on Bounding Box Size ---
+            n_left = int(np.ceil((rx - min_lon) / rw))
+            n_right = int(np.ceil((max_lon - (rx + rw)) / rw))
+            x_grid = [rx - i * rw for i in range(1, n_left + 1)] + \
+                     [rx, rx + rw] + \
+                     [rx + rw + i * rw for i in range(1, n_right + 1)]
+            
+            n_bottom = int(np.ceil((ry - min_lat) / rh))
+            n_top = int(np.ceil((max_lat - (ry + rh)) / rh))
+            y_grid = [ry - i * rh for i in range(1, n_bottom + 1)] + \
+                     [ry, ry + rh] + \
+                     [ry + rh + i * rh for i in range(1, n_top + 1)]
+            
+            x_grid = sorted([x for x in x_grid if min_lon - 1e-5 <= x <= max_lon + 1e-5])
+            y_grid = sorted([y for y in y_grid if min_lat - 1e-5 <= y <= max_lat + 1e-5])
+
+            for x in x_grid:
+                ax.plot([x, x], [min_lat, max_lat], color='blue', ls=':', lw=0.8, alpha=0.7, transform=ccrs.PlateCarree())
+                ax.text(x, min_lat, f'{x:.2f}', color='blue', fontsize=6.5, fontweight='bold',
+                        ha='center', va='top', transform=ccrs.PlateCarree())
+            
+            for y in y_grid:
+                ax.plot([min_lon, max_lon], [y, y], color='blue', ls=':', lw=0.8, alpha=0.7, transform=ccrs.PlateCarree())
+                ax.text(min_lon, y, f'{y:.2f}', color='blue', fontsize=6.5, fontweight='bold',
+                        ha='right', va='center', transform=ccrs.PlateCarree())
+            
             
             
             c_lon, c_lat = centroids[end-1]
@@ -366,8 +392,8 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
 
 #fixing the final things like extent, ticksm colorbar, legend title and saving the image
             ax.set_extent([min_lon, max_lon, min_lat, max_lat])
-            ax.set_xticks(lon_ticks, crs=ccrs.PlateCarree())
-            ax.set_yticks(lat_ticks, crs=ccrs.PlateCarree())
+            ax.set_xticks([], crs=ccrs.PlateCarree())
+            ax.set_yticks([], crs=ccrs.PlateCarree())
             ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
             plt.colorbar(im, label="Probability (%)", pad=0.02, fraction=0.04)
             plt.title(f"Hours: {start}-{end}")
@@ -407,101 +433,149 @@ def plot_combined(output_path,id_number,intervals, trajectories, centroids, ds_h
     lat_ticks = np.arange(np.ceil(min_lat), np.floor(max_lat) + 1)
     
     cmap = get_cmap("PuBuGn")
+    # --- 2x2 PAGINATED COMBINED PLOT ---
+    # Each page shows exactly 4 subplots in a 2x2 grid.
+    # If intervals > 4, extra intervals overflow onto subsequent pages.
+    # Each subplot also annotates the bounding box corners with their lon/lat.
     if plot_combined:
         n = len(intervals)
-        rows, cols = (n + 2) // 3, min(n, 3)####this line is only added to make all the figures together with the subplots
-        fig, axes = plt.subplots(rows, cols, figsize=(6*cols, 6*rows), 
-                                 subplot_kw={'projection': ccrs.PlateCarree()})
-        axes = np.array(axes).flatten()
+        images_per_page = 4  # Fixed 2x2 grid
+        num_pages = (n + images_per_page - 1) // images_per_page
 
-        for idx, (start, end) in enumerate(intervals):
-            ax = axes[idx]
-            ax.add_feature(cfeature.LAND, facecolor='lightgray')
-            ax.coastlines(lw=0.5)
+        for page_idx in range(num_pages):
+            # Slice the intervals that belong to this page
+            start_i = page_idx * images_per_page
+            end_i = min(start_i + images_per_page, n)
+            page_intervals = intervals[start_i:end_i]
 
-            # 1. Faster Probability Calculation
-            step_data = trajectories[:, start:end, :].reshape(-1, 2)
-            valid_pts = step_data[~np.isnan(step_data[:, 0])]
-            
-            if len(valid_pts) > 0:
-                counts, _, _ = np.histogram2d(valid_pts[:, 1], valid_pts[:, 0], bins=[lat_bins, lon_bins])#change the tcounts name with counts
+            fig, axes = plt.subplots(2, 2, figsize=(14, 12),
+                                     subplot_kw={'projection': ccrs.PlateCarree()})
+            axes = np.array(axes).flatten()
 
+            for idx, (start, end) in enumerate(page_intervals):
+                ax = axes[idx]
+                ax.add_feature(cfeature.LAND, facecolor='lightgray')
+                ax.coastlines(lw=0.5)
 
-                probs = (counts / counts.sum()) * 100
-                im = ax.imshow(np.ma.masked_where(counts == 0, probs), origin="lower", cmap=cmap,
-                               extent=[lon_bins[0], lon_bins[-1], lat_bins[0], lat_bins[-1]],
-                               norm=Normalize(0, max_prob_global), transform=ccrs.PlateCarree())
-                plt.colorbar(im, ax=ax, label="Prob (%)", pad=0.02, fraction=0.04)
+                # --- Probability heatmap ---
+                step_data = trajectories[:, start:end, :].reshape(-1, 2)
+                valid_pts = step_data[~np.isnan(step_data[:, 0])]
 
-                # 2. Bounding Box Logic
-                pos = np.argwhere(counts > 0)
-                y_min, x_min = pos.min(axis=0); y_max, x_max = pos.max(axis=0)
-                rx, ry = lon_bins[x_min], lat_bins[y_min]
-                rw, rh = lon_bins[x_max+1] - rx, lat_bins[y_max+1] - ry
-                ax.add_patch(Rectangle((rx, ry), rw, rh, fill=False, edgecolor='blue', ls='--'))
-                
-                ##add the following lines if we need two boxes otherwise remove the part
+                if len(valid_pts) > 0:
+                    counts, _, _ = np.histogram2d(
+                        valid_pts[:, 1], valid_pts[:, 0],
+                        bins=[lat_bins, lon_bins]
+                    )
+                    probs = (counts / counts.sum()) * 100
+                    im = ax.imshow(
+                        np.ma.masked_where(counts == 0, probs),
+                        origin="lower", cmap=cmap,
+                        extent=[lon_bins[0], lon_bins[-1], lat_bins[0], lat_bins[-1]],
+                        norm=Normalize(0, max_prob_global),
+                        transform=ccrs.PlateCarree()
+                    )
+                    plt.colorbar(im, ax=ax, label="Prob (%)", pad=0.02, fraction=0.04)
 
-                
-                
-            # 2. Real Drifter Track
-            if plot_beacon_track:
-                dt_end = beacon_time[min(end, len(beacon_time)-1)]
-                m = beacon_time <= dt_end
-                ax.plot(beacon_lon[m], beacon_lat[m], 'magenta', lw=1.5, label='final drifter')
+                    # --- Bounding box using physical grid edges ---
+                    pos = np.argwhere(counts > 0)
+                    y_min_b, x_min_b = pos.min(axis=0)
+                    y_max_b, x_max_b = pos.max(axis=0)
+                    rx  = lon_bins[x_min_b]
+                    ry  = lat_bins[y_min_b]
+                    rw  = lon_bins[x_max_b + 1] - rx
+                    rh  = lat_bins[y_max_b + 1] - ry
+                    ax.add_patch(Rectangle(
+                        (rx, ry), rw, rh,
+                        fill=False, edgecolor='blue', ls='--', lw=1.5
+                    ))
 
+                    # --- Dynamic Grid Lines based on Bounding Box Size ---
+                    n_left = int(np.ceil((rx - min_lon) / rw))
+                    n_right = int(np.ceil((max_lon - (rx + rw)) / rw))
+                    x_grid = [rx - i * rw for i in range(1, n_left + 1)] + \
+                             [rx, rx + rw] + \
+                             [rx + rw + i * rw for i in range(1, n_right + 1)]
+                    
+                    n_bottom = int(np.ceil((ry - min_lat) / rh))
+                    n_top = int(np.ceil((max_lat - (ry + rh)) / rh))
+                    y_grid = [ry - i * rh for i in range(1, n_bottom + 1)] + \
+                             [ry, ry + rh] + \
+                             [ry + rh + i * rh for i in range(1, n_top + 1)]
+                    
+                    x_grid = sorted([x for x in x_grid if min_lon - 1e-5 <= x <= max_lon + 1e-5])
+                    y_grid = sorted([y for y in y_grid if min_lat - 1e-5 <= y <= max_lat + 1e-5])
 
-            # 3. Currents & Centroids
-            currentavg=ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
-            u_name = list(currentavg.data_vars)[0] 
-            v_name = list(currentavg.data_vars)[1]
-            
-            u_data=currentavg[u_name]
-            v_data=currentavg[v_name]
+                    for x in x_grid:
+                        ax.plot([x, x], [min_lat, max_lat], color='blue', ls=':', lw=0.8, alpha=0.7, transform=ccrs.PlateCarree())
+                        ax.text(x, min_lat, f'{x:.2f}', color='blue', fontsize=6.5, fontweight='bold',
+                                ha='center', va='top', transform=ccrs.PlateCarree())
+                    
+                    for y in y_grid:
+                        ax.plot([min_lon, max_lon], [y, y], color='blue', ls=':', lw=0.8, alpha=0.7, transform=ccrs.PlateCarree())
+                        ax.text(min_lon, y, f'{y:.2f}', color='blue', fontsize=6.5, fontweight='bold',
+                                ha='right', va='center', transform=ccrs.PlateCarree())
 
-    # Now access them dynamically
-            if u_data.ndim == 3 and u_data.shape[0]<10:
-                u_data = u_data.squeeze(dim='DEPTH1_1')
-                v_data = v_data.squeeze(dim='DEPTH1_1')
+                # --- Drifter track (optional) ---
+                if plot_beacon_track and beacon_time is not None:
+                    dt_end = beacon_time[min(end, len(beacon_time) - 1)]
+                    m = beacon_time <= dt_end
+                    ax.plot(beacon_lon[m], beacon_lat[m], 'magenta', lw=1.5, label='Drifter')
 
-            
-            
-            if currentavg is not None and u_data.shape[1]==v_data.shape[1]:
-                q=ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5,::5], scale=10)
-                if idx == 0: ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s')
-            else:
-                q = ax.quiver(u_data.LON[::5], u_data.LAT[::5], u_data[::5,::5], v_data[::5, :-1:5], scale=10)
-                if idx == 0: ax.quiverkey(q, 0.1, 0.95, reference_vector_length, f'{reference_vector_length} m/s')
+                # --- Currents (skip safely if not available) ---
+                if ds_hourly is not None:
+                    currentavg = ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
+                    u_name = list(currentavg.data_vars)[0]
+                    v_name = list(currentavg.data_vars)[1]
+                    u_data = currentavg[u_name]
+                    v_data = currentavg[v_name]
+                    if u_data.ndim == 3 and u_data.shape[0] < 10:
+                        u_data = u_data.squeeze(dim='DEPTH1_1')
+                        v_data = v_data.squeeze(dim='DEPTH1_1')
+                    if u_data.shape[1] == v_data.shape[1]:
+                        q = ax.quiver(u_data.LON[::5], u_data.LAT[::5],
+                                      u_data[::5, ::5], v_data[::5, ::5], scale=10)
+                    else:
+                        q = ax.quiver(u_data.LON[::5], u_data.LAT[::5],
+                                      u_data[::5, ::5], v_data[::5, :-1:5], scale=10)
+                    if idx == 0:
+                        ax.quiverkey(q, 0.1, 0.95, reference_vector_length,
+                                     f'{reference_vector_length} m/s')
 
-            ax.plot(centroids[:end, 0], centroids[:end, 1], 'g-', lw=1, label='Centroid')
-            ax.plot(np.nanmean(trajectories[:,0,0]), np.nanmean(trajectories[:,0,1]), 'r*', ms=10)
-            if start < len(centroids) and not np.any(np.isnan(centroids[start])):
-                ax.plot(centroids[start][0], centroids[start][1], 'o', markersize=6, markeredgecolor='black', fillstyle='none', label='Interval Centroids', transform=ccrs.PlateCarree())
-            if not np.any(np.isnan(centroids[end - 1])):
-                if start == 0 or np.any(np.isnan(centroids[start])):
-                    ax.plot(centroids[end - 1][0], centroids[end - 1][1], 'o', markersize=6, markeredgecolor='black', fillstyle='none', transform=ccrs.PlateCarree())
-                else:
-                    ax.plot(centroids[end - 1][0], centroids[end - 1][1], 'o', markersize=6, markeredgecolor='black', fillstyle='none', transform=ccrs.PlateCarree())
+                # --- Centroids & start marker ---
+                ax.plot(centroids[:end, 0], centroids[:end, 1], 'g-', lw=1, label='Centroid')
+                ax.plot(np.nanmean(trajectories[:, 0, 0]),
+                        np.nanmean(trajectories[:, 0, 1]), 'r*', ms=10, label='LKP')
+                if start < len(centroids) and not np.any(np.isnan(centroids[start])):
+                    ax.plot(centroids[start][0], centroids[start][1], 'o',
+                            markersize=6, markeredgecolor='black', fillstyle='none',
+                            label='Interval Start', transform=ccrs.PlateCarree())
 
-            if plot_sighted_positions and sighted_positions is not None:
-                ax.plot(sighted_positions[:, 0], sighted_positions[:, 1], marker='^', color='brown', markersize=8, linestyle='None', label='Sighted Containers', transform=ccrs.PlateCarree())
+                # --- Sighted positions (optional) ---
+                if plot_sighted_positions and sighted_positions is not None:
+                    ax.plot(sighted_positions[:, 0], sighted_positions[:, 1],
+                            marker='^', color='brown', markersize=8,
+                            linestyle='None', label='Sighted', transform=ccrs.PlateCarree())
 
-            # 4. Standard Formatting
-            ax.set_title(f"{start}-{end} hrs", fontweight="bold")
-            ax.set_extent([min_lon, max_lon, min_lat, max_lat])
-            ax.set_xticks(lon_ticks, crs=ccrs.PlateCarree())
-            ax.set_yticks(lat_ticks, crs=ccrs.PlateCarree())
-            if idx == 0: ax.legend(fontsize=6, loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
+                # --- Map extent, ticks, title ---
+                ax.set_title(f"Hours {start}-{end}", fontweight="bold")
+                ax.set_extent([min_lon, max_lon, min_lat, max_lat])
+                ax.set_xticks([], crs=ccrs.PlateCarree())
+                ax.set_yticks([], crs=ccrs.PlateCarree())
+                if idx == 0:
+                    ax.legend(fontsize=6, loc='upper center',
+                              bbox_to_anchor=(0.5, -0.15), ncol=3)
 
-        # Hide unused subplots
-        for i in range(n, len(axes)): axes[i].axis('off')
-        
-        plt.tight_layout()
-        filename = f"seeding_duration_{id_number}_combined.png"
-        save_path = os.path.join(output_path, filename)
-        plt.savefig(save_path, dpi=300)
-        plt.close()
-            
+            # Hide any unused subplot slots on this page
+            for i in range(len(page_intervals), 4):
+                axes[i].axis('off')
 
-    print(f"Finished plotting {len(intervals)} intervals.")
+            plt.tight_layout()
+            # Save one PNG per page: _page_1.png, _page_2.png …
+            filename = f"seeding_duration_{id_number}_combined_page_{page_idx + 1}.png"
+            save_path = os.path.join(output_path, filename)
+            plt.savefig(save_path, dpi=200)
+            plt.close()
+            print(f"  Saved page {page_idx + 1}/{num_pages}: {filename}")
+
+    print(f"Finished plotting {len(intervals)} intervals across {num_pages if plot_combined else 0} page(s).")
 

@@ -78,7 +78,7 @@ from geojson_utils import create_hull_geojson, save_geojson, create_geojson_inde
 # Generate GeoJSON for each interval
 for interval_idx, prob_grid in enumerate(prob_grids):
     interval_label = f"{intervals[interval_idx][0]:.0f}-{intervals[interval_idx][1]:.0f}h"
-    geojson_data = create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label)
+    geojson_data = create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, max_prob_global=max_prob_global)
     
     if geojson_data:
         filename = f"interval_{interval_idx:03d}_{int(intervals[interval_idx][0]):03d}_{int(intervals[interval_idx][1]):03d}.geojson"
@@ -134,12 +134,17 @@ yhigh=6
 ###if there is drifter plot_beacon_track=False--make this True and add beacon_time,beacon_lon,beacon_lat (in this seq) after max_prob_global
 ### check the actual function and change accordingly in different cases. 
 
-# Plotting function disabled (requires cartopy module)
-# sarat_visuals.plot_combined(outputpath,id_number,intervals, trajectories, centroids, ds_hourly, 
-#                              lon_bins, lat_bins,max_prob_global,
-#                              sighted_positions=sighted_positions,
-#                              plot_beacon_track=False,plot_combined=True,xylimit=False,plot_sighted_positions=True,reference_vector_length = 0.5, 
-#                              output_prefix="seeding")
+# --- Generate paginated 2x2 combined probability images ---
+# This generates one PNG per page of 4 intervals (2x2 grid).
+# Output: seeding_duration_{id}_combined_page_1.png, _page_2.png, ...
+sarat_visuals.plot_combined(
+    outputpath, id_number, intervals, trajectories, centroids, ds_hourly,
+    lon_bins, lat_bins, max_prob_global,
+    sighted_positions=sighted_positions,
+    plot_beacon_track=False, plot_combined=True,
+    xylimit=False, plot_sighted_positions=False,
+    reference_vector_length=0.5, output_prefix="seeding"
+)
 
 # sarat_visuals.plot_combined(outputpath,id_number,intervals, trajectories, centroids, ds_hourly, 
 #                              lon_bins, lat_bins,max_prob_global,beacon_time,beacon_lon,beacon_lat, 
