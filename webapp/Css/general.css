@@ -1,0 +1,23 @@
+#incois-logo {
+    float: left;
+}
+#incois-logo a {
+    display: inline-block;
+    line-height: 100%;
+}
+#incois-logo_right {
+    float: right;
+}
+#incois-logo_right a {
+    display: inline-block;
+    line-height: 100%;
+}
+#incois-headerright {
+    padding: 0;
+}
+#incois-headerright {
+    padding: 0;
+}
+#incois-headerright #incois-pos-top {
+    float: right;
+}

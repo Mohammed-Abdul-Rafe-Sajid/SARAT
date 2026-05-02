@@ -1,6 +1,7 @@
 # Python cache
 __pycache__/
 *.pyc
+case*/figure/*
 
 # Generated outputs
 sarat_new_visualization_changes/case*/figure/
