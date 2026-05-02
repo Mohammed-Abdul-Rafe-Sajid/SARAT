@@ -48,8 +48,9 @@
                 L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
                     attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
                     maxZoom: 18,
-                    id: 'venkat508.0dd9hkgl',
-                    accessToken: 'pk.eyJ1IjoidmVua2F0NTA4IiwiYSI6ImNpcGZsenUzYTAwMDB0NWx2ZWQ2ZW5sNGMifQ.8du6DAzv9L499nZJacW8hQ'
+                    id: 'venkat508.0dd9hkgl'
+                    // SENSITIVE: accessToken commented out - add your own token here
+                    // accessToken: '<YOUR_MAPBOX_TOKEN>'
                 }).addTo(map);
 
                 L.control.coordinates({
