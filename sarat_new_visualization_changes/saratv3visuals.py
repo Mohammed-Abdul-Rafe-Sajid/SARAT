@@ -252,6 +252,35 @@ else:
 
 print("✔ PNG generation complete")
 
+# sarat_visuals.plot_individual(outputpath,intervals, trajectories, centroids, ds_hourly, 
+#                              lon_bins, lat_bins,max_prob_global,beacon_time,beacon_lon,beacon_lat,
+#                              xlow=xlow,xhigh=xhigh,ylow=ylow,yhigh=yhigh,
+#                              plot_beacon_track=True,plot_individual=True,xylimit=True,
+#                              plot_sighted_positions=False,reference_vector_length = 0.5, 
+#                              output_prefix="seeding")
+
+###if there is drifter plot_beacon_track=False--make this True and add beacon_time,beacon_lon,beacon_lat (in this seq) after max_prob_global
+### check the actual function and change accordingly in different cases. 
+
+# --- Generate paginated 2x2 combined probability images ---
+# This generates one PNG per page of 4 intervals (2x2 grid).
+# Output: seeding_duration_{id}_combined_page_1.png, _page_2.png, ...
+sarat_visuals.plot_combined(
+    outputpath, id_number, intervals, trajectories, centroids, ds_hourly,
+    lon_bins, lat_bins, max_prob_global,
+    sighted_positions=sighted_positions,
+    plot_beacon_track=False, plot_combined=True,
+    xylimit=False, plot_sighted_positions=False,
+    reference_vector_length=0.5, output_prefix="seeding"
+)
+
+# sarat_visuals.plot_combined(outputpath,id_number,intervals, trajectories, centroids, ds_hourly, 
+#                              lon_bins, lat_bins,max_prob_global,beacon_time,beacon_lon,beacon_lat, 
+#                              xlow=xlow,xhigh=xhigh,ylow=ylow,yhigh=yhigh, 
+#                              plot_beacon_track=True,plot_combined=True,xylimit=True,
+#                              plot_sighted_positions=False,reference_vector_length = 0.5, 
+#                              output_prefix="seeding")
+
 print("✔ Pipeline complete")
 
 

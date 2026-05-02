@@ -32,76 +32,104 @@ def round_coord(value):
     return float(s)
 
 
-def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=0.05):
+def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=0.05, max_prob_global=None):
     """
-    Convert probability grid → convex hull polygon GeoJSON
+    Convert probability grid → FeatureCollection GeoJSON
     
-    Creates a search region boundary that encloses all high-probability areas.
-    
-    Parameters
-    ----------
-    prob_grid : np.ndarray
-        2D array of probabilities (rows=lat, cols=lon)
-    lon_bins : np.ndarray
-        Longitude bin edges
-    lat_bins : np.ndarray
-        Latitude bin edges
-    interval_label : str
-        Human-readable interval label (e.g., "0-24h")
-    threshold : float
-        Only include cells with probability > threshold (default: 0.05%)
-    
-    Returns
-    -------
-    dict or None
-        GeoJSON Feature with Polygon geometry, or None if insufficient points
+    Creates a FeatureCollection containing:
+    1. A bounding rectangle Feature
+    2. Grid cell Features with calculated colors based on probability
     """
     
+    # Optional: setup colormap for grid cells
+    cmap = None
+    norm = None
+    if max_prob_global is not None and max_prob_global > 0:
+        try:
+            import matplotlib.cm as cm
+            import matplotlib.colors as mcolors
+            cmap = cm.get_cmap('PuBuGn')
+            norm = mcolors.Normalize(vmin=0, vmax=max_prob_global)
+        except ImportError:
+            pass
+
     min_lon, max_lon = float('inf'), float('-inf')
     min_lat, max_lat = float('inf'), float('-inf')
     points_included = 0
     max_prob = 0
+    
+    grid_features = []
     
     for i in range(prob_grid.shape[0]):  # lat dimension
         for j in range(prob_grid.shape[1]):  # lon dimension
             prob_value = prob_grid[i][j]
             
             if prob_value > threshold:
-                # Use the cell's physical bin edges
-                min_lon = min(min_lon, lon_bins[j])
-                max_lon = max(max_lon, lon_bins[j+1])
-                min_lat = min(min_lat, lat_bins[i])
-                max_lat = max(max_lat, lat_bins[i+1])
+                cell_min_lon = lon_bins[j]
+                cell_max_lon = lon_bins[j+1]
+                cell_min_lat = lat_bins[i]
+                cell_max_lat = lat_bins[i+1]
+                
+                # Update bounding box
+                min_lon = min(min_lon, cell_min_lon)
+                max_lon = max(max_lon, cell_max_lon)
+                min_lat = min(min_lat, cell_min_lat)
+                max_lat = max(max_lat, cell_max_lat)
                 
                 points_included += 1
                 max_prob = max(max_prob, prob_value)
+                
+                # Create grid cell geometry
+                cell_coords = [
+                    [round_coord(cell_min_lon), round_coord(cell_min_lat)],
+                    [round_coord(cell_max_lon), round_coord(cell_min_lat)],
+                    [round_coord(cell_max_lon), round_coord(cell_max_lat)],
+                    [round_coord(cell_min_lon), round_coord(cell_max_lat)],
+                    [round_coord(cell_min_lon), round_coord(cell_min_lat)]
+                ]
+                
+                # Determine color
+                fill_color = "#cccccc" # fallback
+                if cmap and norm:
+                    import matplotlib.colors as mcolors
+                    rgba = cmap(norm(prob_value))
+                    fill_color = mcolors.to_hex(rgba)
+                    
+                grid_feature = {
+                    "type": "Feature",
+                    "properties": {
+                        "type": "grid_cell",
+                        "probability": round(float(prob_value), 4),
+                        "color": fill_color
+                    },
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [cell_coords]
+                    }
+                }
+                grid_features.append(grid_feature)
     
     # Need at least 1 point for bounding rectangle
     if points_included == 0:
         print(f"  ⚠️  Interval {interval_label}: 0 points above threshold - skipping rectangle")
         return None
     
-    # Compute bounding rectangle
+    # Compute bounding rectangle feature
     try:
         polygon_coords = [
-            [min_lon, min_lat],
-            [max_lon, min_lat],
-            [max_lon, max_lat],
-            [min_lon, max_lat],
-            [min_lon, min_lat]
+            [round_coord(min_lon), round_coord(min_lat)],
+            [round_coord(max_lon), round_coord(min_lat)],
+            [round_coord(max_lon), round_coord(max_lat)],
+            [round_coord(min_lon), round_coord(max_lat)],
+            [round_coord(min_lon), round_coord(min_lat)]
         ]
         
-        # Round every vertex coordinate to 6 decimal places before writing
-        # GeoJSON to avoid unnecessary floating-point noise in the output.
-        polygon_coords = [[round_coord(v[0]), round_coord(v[1])] for v in polygon_coords]
-        
-        # Approximate area of the bounding box
         box_area = (max_lon - min_lon) * (max_lat - min_lat)
         
-        # Create GeoJSON Feature
-        geojson = {
+        bbox_feature = {
             "type": "Feature",
             "properties": {
+                "type": "bounding_box",
                 "interval": interval_label,
                 "points_included": points_included,
                 "max_probability": round(float(max_prob), 4),
@@ -111,6 +139,19 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
                 "type": "Polygon",
                 "coordinates": [polygon_coords]
             }
+        }
+        
+        # Combine bounding box and grid cells
+        features = [bbox_feature] + grid_features
+        
+        geojson = {
+            "type": "FeatureCollection",
+            "properties": {
+                "interval": interval_label,
+                "points_included": points_included,
+                "max_probability": round(float(max_prob), 4)
+            },
+            "features": features
         }
         
         return geojson
