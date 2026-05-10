@@ -105,9 +105,8 @@ function getHeatmapStyle(feature) {
 function onHeatmapEachFeature(feature, layer) {
     if (feature.properties && feature.properties.probability !== undefined) {
         const prob = parseFloat(feature.properties.probability).toFixed(2);
-        layer.bindTooltip(
-            `Probability: ${prob}%`,
-            { sticky: true }
+        layer.bindPopup(
+            `Probability: ${prob}%`
         );
     }
 }
@@ -118,7 +117,7 @@ function renderHeatmapGeoJSON(data, map) {
         map.removeLayer(heatmapGeoLayer);
     }
 
-    heatmapGeoLayer = L.geoJSON(data, {
+    heatmapGeoLayer = L.geoJson(data, {
         style: getHeatmapStyle,
         onEachFeature: onHeatmapEachFeature
     }).addTo(map);

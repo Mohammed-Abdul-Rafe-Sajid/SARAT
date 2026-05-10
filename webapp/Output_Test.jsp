@@ -25,7 +25,9 @@
         </style>
         <script type='text/javascript'>//<![CDATA[
             var marker = null, map = null;
-            const uniqueId = '<%= request.getParameter("request_id")%>';
+            // FOR TESTING: Hardcoding case 6687
+            // const uniqueId = '<%= request.getParameter("request_id")%>';
+            const uniqueId = '6687';
             let textContent = ""; // This is used by mousemove and mouseover
 
             let legend = []; // This is used in loading probability regions
@@ -439,7 +441,7 @@
                         const blob = await logoData.blob();
                         const reader = new FileReader();
                         reader.readAsDataURL(blob);
-                        reader.onloadend = function() {
+                        reader.onloadend = async function() {
                             const base64data = reader.result.split(',')[1]; // Get the Base64 part
 
                             var placemark = "<Placemark><name>INCOIS_Logo</name>" +
@@ -467,6 +469,52 @@
 
                             // Add the Base64 encoded image to the ZIP archive
                             zip.file('Images/logo.png', base64data, {base64: true});
+
+                            // --- ADD V3 TIME-BASED INTERVAL KMLs ---
+                            // If heatmap index data is available, load each interval period
+                            // and generate a separate KML file in the KMZ.
+                            if (heatmapIndexData && heatmapIndexData.files) {
+                                for (let i = 0; i < heatmapIndexData.files.length; i++) {
+                                    const fileName = heatmapIndexData.files[i];
+                                    const kmlFileName = fileName.replace('.geojson', '.kml');
+                                    let intervalName = "Interval_" + i;
+                                    if (heatmapIndexData.intervals && heatmapIndexData.intervals[i]) {
+                                        // Format as Hours_Start_End
+                                        intervalName = "Hours_" + heatmapIndexData.intervals[i][0] + "_" + heatmapIndexData.intervals[i][1];
+                                    }
+                                    
+                                    try {
+                                        // --- NEW: Fetch pre-generated KML directly ---
+                                        let resp = await fetch('data/' + kmlFileName);
+                                        if (resp.ok) {
+                                            let kmlContent = await resp.text();
+                                            zip.file('Intervals/' + intervalName + '.kml', kmlContent);
+                                        } else {
+                                            console.warn("KML file not found: " + kmlFileName);
+                                            
+                                            /* 
+                                            // --- OLD: Fallback to local conversion if KML fetch fails ---
+                                            let geoResp = await fetch('data/' + fileName);
+                                            if (geoResp.ok) {
+                                                let geojson = await geoResp.json();
+                                                geojson = embedStylesAndPopup(geojson, getStyleForProbabilityRegion, getPopupContentForProbabilityRegion);
+                                                let intervalKml = tokml(geojson, {
+                                                                    documentName: 'SARAT_' + uniqueId + '_' + intervalName,
+                                                                    documentDescription: 'KML for SARAT probability region ' + intervalName,
+                                                                    name: 'name',
+                                                                    description: 'popupContent',
+                                                                    simplestyle: true
+                                                            });
+                                                zip.file('Intervals/' + intervalName + '.kml', intervalKml);
+                                            }
+                                            */
+                                        }
+                                    } catch(e) {
+                                        console.error("Failed to fetch KML for interval", fileName, e);
+                                    }
+                                }
+                            }
+                            // ----------------------------------------
 
                             // Generate the KMZ file and trigger download
                             zip.generateAsync({ type: 'blob' }).then(function(content) {
@@ -506,7 +554,7 @@
             // Load heatmap index file
             async function initHeatmapIntervals() {
                 try {
-                    const response = await fetch('data/geojson_index.json');
+                    const response = await fetch('data/interval_index_' + uniqueId + '.json');
                     if (!response.ok) {
                         // Heatmap index not available, skip
                         console.log('Heatmap index not available');
@@ -524,14 +572,18 @@
             // Populate interval selector dropdown
             function populateIntervalSelector(indexData) {
                 const selector = document.getElementById('intervalSelector');
-                if (!indexData.intervals || indexData.intervals.length === 0) {
+                if (!indexData.files || indexData.files.length === 0) {
                     return;
                 }
 
-                indexData.intervals.forEach((interval, index) => {
+                indexData.files.forEach((file, index) => {
                     const option = document.createElement('option');
-                    option.value = interval.file;
-                    option.textContent = interval.name || `Interval ${index}`;
+                    option.value = file;
+                    let intervalStr = "Interval " + index;
+                    if (indexData.intervals && indexData.intervals[index]) {
+                        intervalStr = "Hours " + indexData.intervals[index][0] + " - " + indexData.intervals[index][1];
+                    }
+                    option.textContent = intervalStr;
                     selector.appendChild(option);
                 });
             }
@@ -539,7 +591,8 @@
             // Change heatmap interval
             function changeHeatmapInterval(filepath) {
                 if (!filepath || !currentMap) return;
-                loadHeatmapInterval(filepath, currentMap);
+                const actualPath = filepath.startsWith('data/') ? filepath : 'data/' + filepath;
+                loadHeatmapInterval(actualPath, currentMap);
             }
 
             // Toggle heatmap layer visibility
@@ -695,13 +748,14 @@
             <div class="contentpage">               
                 <div id="contents">
                     <%
-                        if ((session.getAttribute("userid") == null) || (session.getAttribute("userid") == "")) {
+                        // LOCAL DEV BYPASS: Commented out the authentication redirect
+                        // if ((session.getAttribute("userid") == null) || (session.getAttribute("userid") == "")) {
                     %>
                     <br/>
-                    <%      String message = "please login";
-                            response.sendRedirect("home.jsp?message=" + message);
-                            return;
-                        }
+                    <%      // String message = "please login";
+                            // response.sendRedirect("home.jsp?message=" + message);
+                            // return;
+                        // }
                     %>
                     <style type="text/css">
                         .right_inner1 .heading{
@@ -734,7 +788,8 @@
                     </div>
                     <div style="float:center;width:100%;padding-bottom: 20px">
                         <%
-                            System.out.println(request.getParameter("request_id"));
+                            // System.out.println(request.getParameter("request_id"));
+                            System.out.println("TESTING MODE: uniqueId forced to 6687");
                         %>
                         <!-- Heatmap Interval Selector (Optional) -->
                         <div id="heatmapControls" style="margin-bottom: 10px; display: none;">

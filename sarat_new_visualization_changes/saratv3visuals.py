@@ -12,11 +12,12 @@ import os
 import numpy as np
 
 # -------- CLI + fallback logic --------
-
-if len(sys.argv) >= 2:
-    id_number = int(sys.argv[1])
-else:
-    id_number = 6687
+# FOR TESTING: Hardcoding case 6687 as requested.
+# if len(sys.argv) >= 2:
+#     id_number = int(sys.argv[1])
+# else:
+#     id_number = 6687
+id_number = 6687
 
 # Base path of script
 base_path = os.path.dirname(os.path.abspath(__file__))
@@ -78,12 +79,10 @@ print(f"  Current intervals: {intervals}")
 print(f"  Total intervals: {len(prob_grids)}")
 
 # Dynamic interval_size based on trajectory_length (rule-based)
-if trajectory_length >= 72:  # 3 days or more
-    new_interval_size = 12
-elif trajectory_length >= 24:  # 1 day or more
+if trajectory_length <= 24:  # 1 day or less
     new_interval_size = 6
-else:
-    new_interval_size = 4
+else:  # More than 1 day
+    new_interval_size = 12
 
 print(f"\n🔧 INTERVAL SIZE ADJUSTMENT:")
 print(f"  Recommended interval_size: {new_interval_size} hours")
@@ -135,6 +134,7 @@ print(f"  Processing {len(prob_grids)} intervals...")
 from geojson_utils import create_grid_geojson, create_hull_geojson, save_geojson, create_geojson_index
 
 # Generate GeoJSON for each interval with BOTH hull boundary and grid heatmap
+geojson_filenames = []
 for interval_idx, prob_grid in enumerate(prob_grids):
     interval_label = f"{intervals[interval_idx][0]:.0f}-{intervals[interval_idx][1]:.0f}h"
     # Check if grid has any data
@@ -153,16 +153,21 @@ for interval_idx, prob_grid in enumerate(prob_grids):
     
     # Add hull feature first (boundary layer)
     if hull_geojson:
-        geojson_data["features"].append(hull_geojson)
+        if hull_geojson.get("type") == "FeatureCollection" and hull_geojson.get("features"):
+            geojson_data["features"].extend(hull_geojson["features"])
+        elif hull_geojson.get("type") == "Feature":
+            geojson_data["features"].append(hull_geojson)
     
     # Add grid features second (heatmap layer)
     if grid_geojson and grid_geojson.get("features"):
         geojson_data["features"].extend(grid_geojson["features"])
     
     if geojson_data and geojson_data.get("features"):
-        filename = f"interval_{interval_idx:03d}_{int(intervals[interval_idx][0]):03d}_{int(intervals[interval_idx][1]):03d}.geojson"
-        filepath = os.path.join(outputpath, filename)
+        filename = f"interval_{interval_idx:03d}_{id_number}.geojson"
+        filepath = os.path.join(inputpath, filename)
         save_geojson(geojson_data, filepath)
+        geojson_filenames.append(filename)
+        
         hull_count = 1 if hull_geojson else 0
         grid_count = len(grid_geojson["features"]) if grid_geojson and grid_geojson.get("features") else 0
         print(f"  ✓ Interval {interval_idx}: 1 hull + {grid_count} cells → {filename}")
@@ -170,14 +175,16 @@ for interval_idx, prob_grid in enumerate(prob_grids):
         print(f"  ⚠ Interval {interval_idx}: No features generated")
 
 # Create index of all GeoJSON files
-create_geojson_index(
-    [f for f in os.listdir(outputpath) if f.endswith('.geojson')],
-    intervals,
-    id_number
-)
+index_data = create_geojson_index(geojson_filenames, intervals, id_number)
+index_filepath = os.path.join(inputpath, f"interval_index_{id_number}.json")
+save_geojson(index_data, index_filepath)
 
 print("✔ GeoJSON generation complete")
 
+print("✔ Generating KML files...")
+import convert_to_kml
+convert_to_kml.convert_all(inputpath)
+print("✔ KML generation complete")
 
 print("✔ Generating PDF report...")
 
