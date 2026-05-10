@@ -41,6 +41,251 @@
                 latsign = 1;
                 lonsign = 1;
             }
+
+            /* DDM variables */
+            var ddm_latsign = 1;
+            var ddm_lonsign = 1;
+            var ddm_dlat = 0;
+            var ddm_dlon = 0;
+            var ddm_mlat = 0;
+            var ddm_mlon = 0;
+
+            /* DDM validation for latitude degree */
+            function checkDDM_lat_deg() {
+                var value = input_form.ddm_dlat.value;
+                if (value < 0) { ddm_latsign = -1; }
+                ddm_dlat = Math.abs(Math.round(parseFloat(value) * 1000000));
+                if (ddm_dlat > (90 * 1000000)) {
+                    alert('Degrees Latitude must be in the range of -90 to 90.');
+                    input_form.ddm_dlat.value = '';
+                    return false;
+                }
+                return true;
+            }
+
+            /* DDM validation for latitude decimal minute */
+            function checkDDM_lat_min() {
+                var value = input_form.ddm_mlat.value;
+                ddm_mlat = Math.abs(Math.round(parseFloat(value) * 1000000));
+                if (ddm_mlat > (60 * 1000000)) {
+                    alert('Decimal Minutes Latitude must be in the range of 0 to 60.');
+                    input_form.ddm_mlat.value = '';
+                    return false;
+                }
+                return true;
+            }
+
+            /* DDM validation for longitude degree */
+            function checkDDM_lon_deg() {
+                var value = input_form.ddm_dlon.value;
+                if (value < 0) { ddm_lonsign = -1; }
+                ddm_dlon = Math.abs(Math.round(parseFloat(value) * 1000000));
+                if (ddm_dlon > (180 * 1000000)) {
+                    alert('Degrees Longitude must be in the range of -180 to 180.');
+                    input_form.ddm_dlon.value = '';
+                    return false;
+                }
+                return true;
+            }
+
+            /* DDM validation for longitude decimal minute */
+            function checkDDM_lon_min() {
+                var value = input_form.ddm_mlon.value;
+                ddm_mlon = Math.abs(Math.round(parseFloat(value) * 1000000));
+                if (ddm_mlon > (60 * 1000000)) {
+                    alert('Decimal Minutes Longitude must be in the range of 0 to 60.');
+                    input_form.ddm_mlon.value = '';
+                    return false;
+                }
+                return true;
+            }
+
+            /* function to convert DDM to DD*/
+            function DDM_cal() {
+                // DDM to DD formula: DD = degrees + (decimal_minutes / 60)
+                // Store all values with same precision handling as DMS
+                input_form.latitude.value = Math.round(ddm_dlat + (ddm_mlat / 60)) * ddm_latsign / 1000000;
+                input_form.longitude.value = Math.round(ddm_dlon + (ddm_mlon / 60)) * ddm_lonsign / 1000000;
+                updateMap();
+                ddm_latsign = 1;
+                ddm_lonsign = 1;
+            }
+
+            /* Toggle visibility of coordinate format sections */
+            function toggleCoordinateFormat(format) {
+                var ddtodmsSection = document.getElementById('ddtodms');
+                var ddtomSection = document.getElementById('ddtom');
+                
+                if (format === 'dms') {
+                    ddtodmsSection.style.display = 'block';
+                    ddtomSection.style.display = 'none';
+                } else if (format === 'ddm') {
+                    ddtodmsSection.style.display = 'none';
+                    ddtomSection.style.display = 'block';
+                } else { // dd
+                    ddtodmsSection.style.display = 'none';
+                    ddtomSection.style.display = 'none';
+                }
+            }
+
+            /* RELEASE MODE MANAGEMENT (NEW) */
+            var releaseMode = 'single'; // default mode
+            var locationCounter = 2; // for adding new locations
+
+            function toggleReleaseMode(mode) {
+                releaseMode = mode;
+                var latlong_final = document.getElementById('latlong_final');
+                var multi_location_section = document.getElementById('multi_location_section');
+                var continuous_source_section = document.getElementById('continuous_source_section');
+                
+                // Hide all sections first
+                latlong_final.style.display = 'none';
+                multi_location_section.style.display = 'none';
+                continuous_source_section.style.display = 'none';
+                
+                // Show appropriate section based on mode
+                if (mode === 'single') {
+                    latlong_final.style.display = 'block';
+                    map_mouse_Enable();
+                } else if (mode === 'multi_location') {
+                    multi_location_section.style.display = 'block';
+                    // Initialize date picker for multi_lkt
+                    initializeMultiLKTDatePicker();
+                    map_mouse_Disable();
+                } else if (mode === 'continuous_source') {
+                    continuous_source_section.style.display = 'block';
+                    // Initialize date pickers for continuous mode
+                    initializeContinuousTimeDatePickers();
+                    map_mouse_Disable();
+                }
+            }
+
+            /* Add new location for multiple location release mode */
+            var locationCounter = 2;
+            function addLocation() {
+                locationCounter++;
+                var container = document.getElementById('locations_container');
+                var newLocation = document.createElement('div');
+                newLocation.className = 'location-set';
+                newLocation.id = 'location-' + locationCounter;
+                newLocation.style.cssText = 'background: white; padding: 10px; margin: 10px 0; border-left: 3px solid #0088cc;';
+                newLocation.innerHTML = `
+                    <div class="form-group">
+                        <label class="col-md-4 control-label">Location ${locationCounter} (LKP${locationCounter}):</label>
+                        <div class="col-md-6">
+                            <div class="form-group" style="margin-bottom: 8px;">
+                                <input type="text" class="form-control input-md location-latitude" placeholder="Latitude" style="width: 48%; display: inline-block; margin-right: 2%;">
+                                <input type="text" class="form-control input-md location-longitude" placeholder="Longitude" style="width: 48%; display: inline-block;">
+                            </div>
+                            <button type="button" class="btn btn-danger btn-xs" onclick="removeLocation('location-${locationCounter}')">Remove</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(newLocation);
+            }
+
+            /* Remove location from multiple location release mode */
+            function removeLocation(locationId) {
+                var element = document.getElementById(locationId);
+                if (element) {
+                    element.remove();
+                }
+            }
+
+            /* Initialize date picker for multiple location LKT */
+            function initializeMultiLKTDatePicker() {
+                $('#multi_lkt').datetimepicker({
+                    format: 'Y-m-d H:i:00',
+                    lang: 'en',
+                    step: 5,
+                    minDate: mindate,
+                    maxDate: maxdate,
+                    defaultTime: '05:30'
+                });
+            }
+
+            /* Initialize date pickers for continuous mode */
+            function initializeContinuousTimeDatePickers() {
+                $('#cont_start_time').datetimepicker({
+                    format: 'Y-m-d H:i:00',
+                    lang: 'en',
+                    step: 5,
+                    minDate: mindate,
+                    maxDate: maxdate,
+                    defaultTime: '05:30'
+                });
+                $('#cont_end_time').datetimepicker({
+                    format: 'Y-m-d H:i:00',
+                    lang: 'en',
+                    step: 5,
+                    minDate: mindate,
+                    maxDate: maxdate,
+                    defaultTime: '05:30'
+                });
+            }
+
+            /* Serialize multiple locations for form submission */
+            function serializeLocations() {
+                var locations = document.querySelectorAll('.location-set');
+                var locationsData = [];
+                
+                locations.forEach(function(locDiv, index) {
+                    var latInput = locDiv.querySelector('.location-latitude');
+                    var lonInput = locDiv.querySelector('.location-longitude');
+                    
+                    if (latInput.value && lonInput.value) {
+                        locationsData.push({
+                            index: index + 1,
+                            latitude: latInput.value,
+                            longitude: lonInput.value
+                        });
+                    }
+                });
+                
+                return locationsData;
+            }
+
+            /* Enhanced form submission that handles multiple locations */
+            document.addEventListener('DOMContentLoaded', function() {
+                var form = document.getElementById('input_form');
+                if (form) {
+                    var originalSubmit = form.onsubmit;
+                    
+                    form.onsubmit = function(e) {
+                        var releaseMode = document.querySelector('input[name="release_mode"]:checked').value;
+                        
+                        // Handle multi-location serialization
+                        if (releaseMode === 'multi_location') {
+                            var locations = serializeLocations();
+                            
+                            // Create hidden inputs for each location
+                            locations.forEach(function(loc) {
+                                var latInput = document.createElement('input');
+                                latInput.type = 'hidden';
+                                latInput.name = 'location_' + loc.index + '_latitude';
+                                latInput.value = loc.latitude;
+                                form.appendChild(latInput);
+                                
+                                var lonInput = document.createElement('input');
+                                lonInput.type = 'hidden';
+                                lonInput.name = 'location_' + loc.index + '_longitude';
+                                lonInput.value = loc.longitude;
+                                form.appendChild(lonInput);
+                            });
+                            
+                            // Add location count
+                            var countInput = document.createElement('input');
+                            countInput.type = 'hidden';
+                            countInput.name = 'location_count';
+                            countInput.value = locations.length;
+                            form.appendChild(countInput);
+                        }
+                        
+                        // Call original validation
+                        return checkForm();
+                    };
+                }
+            });
             
             $(function() {
                 $("#From_date").tooltip({
@@ -246,7 +491,7 @@
                                     return;
                                 }
                             %>
-                            <form class="form-horizontal" name="input_form" action="Store" method="post" onsubmit="return checkForm(event)">
+                            <form class="form-horizontal" id="input_form" name="input_form" action="Store" method="post" onsubmit="return checkForm(event)">
                                 <fieldset>
                                     <!-- missing object selection -->
                                     <div class="form-group">
@@ -337,7 +582,7 @@
 
                                     <!-- To date Field-->
                                     <div class="form-group">
-                                        <label class="col-md-4 control-label" for="To_date"><fmt:message key="main.label.searchtime" /> :<font color="red">*</font></label>  
+                                        <label class="col-md-4 control-label" for="To_date"><fmt:message key="main.label.simulationtime" /> :<font color="red">*</font></label>  
                                         <div class="col-md-2">
                                             <input id="To_date" name="To_date" type="text" placeholder="" class="form-control input-md" required="" title="Date format:YYYY-MM-DD HH:mm:ss" readonly>
 
@@ -352,6 +597,30 @@
                                             </div>
                                         </div>
                                     </center>
+                                    <!-- Release Mode Selector (NEW) -->
+                                    <div class="form-group">
+                                        <label class="col-md-4 control-label" for="release_mode">Release Mode:</label>
+                                        <div class="col-md-6">
+                                            <div class="radio">
+                                                <label for="release_mode-0">
+                                                    <input type="radio" name="release_mode" id="release_mode-0" value="single" checked="checked" onchange="toggleReleaseMode('single')">
+                                                    Single Release (One Location, One Time)
+                                                </label>
+                                            </div>
+                                            <div class="radio">
+                                                <label for="release_mode-1">
+                                                    <input type="radio" name="release_mode" id="release_mode-1" value="multi_location" onchange="toggleReleaseMode('multi_location')">
+                                                    Multiple Location Release (Same Time)
+                                                </label>
+                                            </div>
+                                            <div class="radio">
+                                                <label for="release_mode-2">
+                                                    <input type="radio" name="release_mode" id="release_mode-2" value="continuous_source" onchange="toggleReleaseMode('continuous_source')">
+                                                    Continuous Moving Source (Moving Object)
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <!-- Radio button to check weather knows lat long or not   -->
                                     <div class="form-group">
                                         <label class="col-md-4 control-label" for="place_know"><fmt:message key="main.lablel.latlonknows" />:</label>
@@ -481,26 +750,32 @@
                                         </div>
                                     </div>
                                     <div id="dddms_radio">
-                                        <!-- Radio know weather lat longs are in DMS or DD -->
+                                        <!-- Radio know weather lat longs are in DMS, DD, or DDM -->
                                         <div class="form-group">
                                             <label class="col-md-4 control-label" for="latlong"><fmt:message key="main.lable.latlonin" />:</label>
                                             <div class="col-md-6">
                                                 <div class="radio">
                                                     <label for="latlong-0">
-                                                        <input type="radio" name="latlong" id="latlong-0" value="dd" checked="checked">
+                                                        <input type="radio" name="latlong" id="latlong-0" value="dd" checked="checked" onchange="toggleCoordinateFormat('dd')">
                                                         <fmt:message key="main.radio.dd" />
                                                     </label>
                                                 </div>
                                                 <div class="radio">
                                                     <label for="latlong-1">
-                                                        <input type="radio" name="latlong" id="latlong-1" value="dms">
+                                                        <input type="radio" name="latlong" id="latlong-1" value="dms" onchange="toggleCoordinateFormat('dms')">
                                                         <fmt:message key="main.radio.dms" />
+                                                    </label>
+                                                </div>
+                                                <div class="radio">
+                                                    <label for="latlong-2">
+                                                        <input type="radio" name="latlong" id="latlong-2" value="ddm" onchange="toggleCoordinateFormat('ddm')">
+                                                        <fmt:message key="main.radio.ddm" />
                                                     </label>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div id="ddtodms">                                        
+                                    <div id="ddtodms" style="display:none;">                                        
                                         <!-- Degrees Minutes Seconds for latitude -->
                                         <div class="form-group">
                                             <label class="col-md-4 control-label" for="DMSlat"><fmt:message key="main.label.dmslat" />:<font color="red">*</font></label>  
@@ -527,12 +802,46 @@
                                                         </td></tr></table>
                                             </div>
                                         </div>
-                                        
                                         <!-- DMS-DD converter -->
                                         <div class="form-group">
                                             <label class="col-md-4 control-label" for="ddconverter"></label>
                                             <div class="col-md-2">
                                                 <button type="button" id="ddconverter" name="ddconverter" class="btn btn-primary" onclick="DD_cal()"><fmt:message key="main.button.caldd" /></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="ddtom" style="display:none;">                                        
+                                        <!-- Degrees Decimal Minutes for latitude -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label" for="DDMlat"><fmt:message key="main.label.ddmlat" />:<font color="red">*</font></label>  
+                                            <div class="col-md-2">
+                                                <table>
+                                                    <tr>
+                                                        <td>
+                                                            <input class="form-control input-md" name="ddm_dlat" type="text" size="4" value="" maxlength="4" id="DDMlat" placeholder="Deg" style="font-size: 12pt" tabindex="1" onblur="checkDDM_lat_deg();"></td>
+                                                        <td><input class="form-control input-md" name="ddm_mlat" type="text" size="10" value="" maxlength="10" placeholder="Dec Min" id="DDMlat" style="font-size: 12pt" tabindex="2" onblur="checkDDM_lat_min();"></td></tr></table>
+                                                <small style="color: #888;">Example: 34.567</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Degrees Decimal Minutes for longitude -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label" for="DDMlon"><fmt:message key="main.label.ddmlon" />:<font color="red">*</font></label>  
+                                            <div class="col-md-2">
+                                                <table>
+                                                    <tr>
+                                                        <td>
+                                                            <input class="form-control input-md" name="ddm_dlon" type="text" size="4" value="" maxlength="4" id="DDMlon" placeholder="Deg"style="font-size: 12pt" tabindex="3" onblur="checkDDM_lon_deg();"></td>
+                                                            <td><input class="form-control input-md" name="ddm_mlon" type="text" size="10" value="" maxlength="10" id="DDMlon" placeholder="Dec Min" style="font-size: 12pt" tabindex="4" onblur="checkDDM_lon_min();"></td></tr></table>
+                                                <small style="color: #888;">Example: 69.123</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- DDM-DD converter -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label" for="ddmconverter"></label>
+                                            <div class="col-md-2">
+                                                <button type="button" id="ddmconverter" name="ddmconverter" class="btn btn-primary" onclick="DDM_cal()"><fmt:message key="main.button.caldd" /></button>
                                             </div>
                                         </div>
                                     </div>
@@ -553,6 +862,108 @@
                                             </div>
                                         </div>
 
+                                    </div>
+                                    <!-- MULTIPLE LOCATION RELEASE SECTION (NEW) -->
+                                    <div id="multi_location_section" style="display:none; border: 1px solid #ddd; padding: 15px; margin: 10px 0; background-color: #f9f9f9;">
+                                        <h4 style="color: #333;">Multiple Location Release</h4>
+                                        <p style="color: #666; font-size: 12px;">Add multiple possible origin locations (particles will be seeded from ALL locations)</p>
+                                        
+                                        <div id="locations_container">
+                                            <!-- Location 1 -->
+                                            <div class="location-set" id="location-1" style="background: white; padding: 10px; margin: 10px 0; border-left: 3px solid #0088cc;">
+                                                <div class="form-group">
+                                                    <label class="col-md-4 control-label">Location 1 (LKP1):</label>
+                                                    <div class="col-md-6">
+                                                        <div class="form-group" style="margin-bottom: 8px;">
+                                                            <input type="text" class="form-control input-md location-latitude" placeholder="Latitude" style="width: 48%; display: inline-block; margin-right: 2%;">
+                                                            <input type="text" class="form-control input-md location-longitude" placeholder="Longitude" style="width: 48%; display: inline-block;">
+                                                        </div>
+                                                        <small style="color: #888;">Enter coordinates for this location</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <!-- Location 2 -->
+                                            <div class="location-set" id="location-2" style="background: white; padding: 10px; margin: 10px 0; border-left: 3px solid #0088cc;">
+                                                <div class="form-group">
+                                                    <label class="col-md-4 control-label">Location 2 (LKP2):</label>
+                                                    <div class="col-md-6">
+                                                        <div class="form-group" style="margin-bottom: 8px;">
+                                                            <input type="text" class="form-control input-md location-latitude" placeholder="Latitude" style="width: 48%; display: inline-block; margin-right: 2%;">
+                                                            <input type="text" class="form-control input-md location-longitude" placeholder="Longitude" style="width: 48%; display: inline-block;">
+                                                        </div>
+                                                        <small style="color: #888;">Enter coordinates for this location</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Add More Locations Button -->
+                                        <div style="margin: 10px 0;">
+                                            <button type="button" class="btn btn-default btn-sm" onclick="addLocation()">
+                                                <span class="glyphicon glyphicon-plus"></span> Add More Location
+                                            </button>
+                                        </div>
+
+                                        <!-- Single Release Time for Multiple Locations -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label" for="multi_lkt">Release Time (LKT):<font color="red">*</font></label>  
+                                            <div class="col-md-2">
+                                                <input id="multi_lkt" name="multi_lkt" type="text" placeholder="" class="form-control input-md" readonly title="Date format:YYYY-MM-DD HH:mm:ss">
+                                                <small style="color: #888;">Note: All locations release at same time</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- CONTINUOUS MOVING SOURCE SECTION (NEW) -->
+                                    <div id="continuous_source_section" style="display:none; border: 1px solid #ddd; padding: 15px; margin: 10px 0; background-color: #f9f9f9;">
+                                        <h4 style="color: #333;">Continuous Moving Source</h4>
+                                        <p style="color: #666; font-size: 12px;">Object continuously released while moving from start position to end position during specified time interval.</p>
+                                        
+                                        <!-- Start Position -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label">Start Position (LKP1):<font color="red">*</font></label>
+                                            <div class="col-md-6">
+                                                <div class="form-group" style="margin-bottom: 8px;">
+                                                    <input type="text" id="cont_start_lat" name="cont_start_lat" class="form-control input-md" placeholder="Latitude" style="width: 48%; display: inline-block; margin-right: 2%;">
+                                                    <input type="text" id="cont_start_lon" name="cont_start_lon" class="form-control input-md" placeholder="Longitude" style="width: 48%; display: inline-block;">
+                                                </div>
+                                                <small style="color: #888;">Start location of moving object</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- End Position -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label">End Position (LKP2):<font color="red">*</font></label>
+                                            <div class="col-md-6">
+                                                <div class="form-group" style="margin-bottom: 8px;">
+                                                    <input type="text" id="cont_end_lat" name="cont_end_lat" class="form-control input-md" placeholder="Latitude" style="width: 48%; display: inline-block; margin-right: 2%;">
+                                                    <input type="text" id="cont_end_lon" name="cont_end_lon" class="form-control input-md" placeholder="Longitude" style="width: 48%; display: inline-block;">
+                                                </div>
+                                                <small style="color: #888;">End location of moving object</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Start Time -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label" for="cont_start_time">Start Time (LKT1):<font color="red">*</font></label>  
+                                            <div class="col-md-2">
+                                                <input id="cont_start_time" name="cont_start_time" type="text" placeholder="" class="form-control input-md" readonly title="Date format:YYYY-MM-DD HH:mm:ss">
+                                            </div>
+                                        </div>
+
+                                        <!-- End Time -->
+                                        <div class="form-group">
+                                            <label class="col-md-4 control-label" for="cont_end_time">End Time (LKT2):<font color="red">*</font></label>  
+                                            <div class="col-md-2">
+                                                <input id="cont_end_time" name="cont_end_time" type="text" placeholder="" class="form-control input-md" readonly title="Date format:YYYY-MM-DD HH:mm:ss">
+                                            </div>
+                                        </div>
+
+                                        <div style="background: #fffacd; padding: 10px; margin: 10px 0; border-radius: 3px;">
+                                            <small style="color: #666;">
+                                                <strong>Note:</strong> Simulation extends from earliest time (Start Time) to Simulation End Time. 
+                                                Particles will be continuously released along the path from Start to End Position during the specified time interval.
+                                            </small>
+                                        </div>
                                     </div>
                                     <!-- submitButton -->
                                     <div class="form-group">

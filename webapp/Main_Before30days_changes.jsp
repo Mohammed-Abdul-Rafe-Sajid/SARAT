@@ -343,7 +343,7 @@
 
                                     <!-- To date Field-->
                                     <div class="form-group">
-                                        <label class="col-md-4 control-label" for="To_date"><fmt:message key="main.label.searchtime" /> :<font color="red">*</font></label>  
+                                        <label class="col-md-4 control-label" for="To_date"><fmt:message key="main.label.simulationtime" /> :<font color="red">*</font></label>  
                                         <div class="col-md-2">
                                             <input id="To_date" name="To_date" type="text" placeholder="" class="form-control input-md" required="" title="Date format:YYYY-MM-DD HH:mm:ss" readonly>
 

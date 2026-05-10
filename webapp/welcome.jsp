@@ -231,7 +231,7 @@
                                             <td><%=userres.getString("miss_date_from")%></td>
                                         </tr>
                                         <tr>
-                                            <th><fmt:message key="main.label.searchtime"/></th>
+                                            <th><fmt:message key="main.label.simulationtime"/></th>
                                             <td><%=userres.getString("miss_date_to")%></td>
                                         </tr>
                                     </tbody>
