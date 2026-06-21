@@ -12,12 +12,10 @@ import os
 import numpy as np
 
 # -------- CLI + fallback logic --------
-# FOR TESTING: Hardcoding case 6687 as requested.
-# if len(sys.argv) >= 2:
-#     id_number = int(sys.argv[1])
-# else:
-#     id_number = 6687
-id_number = 6687
+if len(sys.argv) >= 2:
+    id_number = int(sys.argv[1])
+else:
+    id_number = 6687
 
 # Base path of script
 base_path = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +24,22 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 if len(sys.argv) >= 3:
     inputpath = sys.argv[2]
 else:
-    inputpath = os.path.join(base_path, f"case{id_number}")
+    # Look for candidate case directories:
+    # 1. Under sarat_new_visualization_changes/caseXXXX
+    # 2. Under root/caseXXXX
+    # 3. Under root/XXXX (unprefixed, e.g. root/6915)
+    candidate_1 = os.path.join(base_path, f"case{id_number}")
+    candidate_2 = os.path.join(os.path.dirname(base_path), f"case{id_number}")
+    candidate_3 = os.path.join(os.path.dirname(base_path), str(id_number))
+    
+    if os.path.exists(candidate_1):
+        inputpath = candidate_1
+    elif os.path.exists(candidate_2):
+        inputpath = candidate_2
+    elif os.path.exists(candidate_3):
+        inputpath = candidate_3
+    else:
+        inputpath = candidate_1
 
 # Ensure absolute path
 if not os.path.isabs(inputpath):
@@ -41,6 +54,7 @@ if not os.path.exists(outputpath):
 sys.path.append(inputpath)
 import sarat_visuals
 import allin1sarat
+from wind_utils import get_wind_info_for_case
 
 print("✔ Starting pipeline")
 
@@ -122,11 +136,47 @@ print(f"  Intervals: {intervals}")
 print(f"  Total intervals: {len(prob_grids)}")
 
 # Validation: Ensure intervals and prob_grids are in sync
-if len(intervals) != len(prob_grids):
-    print(f"\n⚠️  WARNING: Mismatch between intervals ({len(intervals)}) and prob_grids ({len(prob_grids)})")
-    print(f"   This may indicate incomplete data reload!")
+print(f"\n[OK] Validated: {len(intervals)} intervals = {len(prob_grids)} probability grids")
+
+# ──────────────────────────────────────────────────────────────
+# Extract LKP from userinput file for wind annotation
+# userinput format: case_type lkp_lat lkp_lon start end case_id email phone
+# ──────────────────────────────────────────────────────────────
+lkp_lon_wind = None
+lkp_lat_wind = None
+userinput_path = os.path.join(inputpath, f"userinput_{id_number}.txt")
+if os.path.exists(userinput_path):
+    try:
+        with open(userinput_path) as _f:
+            _parts = _f.read().strip().split()
+        # col 1 = lat, col 2 = lon  (0-indexed)
+        lkp_lat_wind = float(_parts[1])
+        lkp_lon_wind = float(_parts[2])
+        print(f"  LKP for wind: lon={lkp_lon_wind}, lat={lkp_lat_wind}")
+    except Exception as e:
+        print(f"  Could not parse userinput: {e}")
+
+# ──────────────────────────────────────────────────────────────
+# Load current NC and compute per-interval wind/current vectors
+# ──────────────────────────────────────────────────────────────
+NC_DIR = os.path.join(os.path.dirname(base_path), "currentsncfiles_addedlater")
+print(f"\n[>>] Computing per-interval current/wind vectors from {NC_DIR} ...")
+wind_info = None
+if lkp_lon_wind is not None and lkp_lat_wind is not None:
+    wind_info = get_wind_info_for_case(
+        case_id    = id_number,
+        lkp_lon    = lkp_lon_wind,
+        lkp_lat    = lkp_lat_wind,
+        intervals  = intervals,
+        nc_dir     = NC_DIR,
+        sample_step= 4      # sample at 0h, 4h, 8h within each period
+    )
+    if wind_info:
+        print(f"  [OK] Wind info computed for {len(wind_info)} intervals")
+    else:
+        print("  [WARN] Wind info could not be computed (NC file missing?)")
 else:
-    print(f"\n✅ Validated: {len(intervals)} intervals = {len(prob_grids)} probability grids ✓")
+    print("  [WARN] LKP not available; skipping wind extraction")
 
 print("\n✔ Starting GeoJSON generation...")
 print(f"  Processing {len(prob_grids)} intervals...")
@@ -254,7 +304,8 @@ else:
         xylimit=False,
         plot_sighted_positions=True,
         reference_vector_length=0.5,
-        output_prefix="seeding"
+        output_prefix="seeding",
+        wind_info=wind_info
     )
 
 print("✔ PNG generation complete")
@@ -278,7 +329,8 @@ sarat_visuals.plot_combined(
     sighted_positions=sighted_positions,
     plot_beacon_track=False, plot_combined=True,
     xylimit=False, plot_sighted_positions=False,
-    reference_vector_length=0.5, output_prefix="seeding"
+    reference_vector_length=0.5, output_prefix="seeding",
+    wind_info=wind_info
 )
 
 # sarat_visuals.plot_combined(outputpath,id_number,intervals, trajectories, centroids, ds_hourly, 
