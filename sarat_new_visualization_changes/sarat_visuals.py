@@ -276,7 +276,8 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
                              sighted_positions=None, plot_beacon_track=True,plot_individual=True,
                              xylimit=True,plot_sighted_positions=True,
                              reference_vector_length = 0.5, 
-                             output_prefix="seeding"):
+                             output_prefix="seeding",
+                             wind_info=None):
     """
     Creates individual PNG maps for each time interval.
     """
@@ -337,7 +338,7 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
                            norm=Normalize(0, max_prob_global), transform=ccrs.PlateCarree())
 
             # 4. Currents (Quiver) - Safe handling for missing ocean current data
-            if ds_hourly is not None:
+            if ds_hourly is not None and wind_info is None:
                 try:
                     currentavg = ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
                     u_name = list(currentavg.data_vars)[0] 
@@ -421,6 +422,18 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
                 ax.plot(sighted_positions[:, 0], sighted_positions[:, 1], marker='^', color='brown', markersize=8, linestyle='None', label='Sighted Containers', transform=ccrs.PlateCarree())
 
 #fixing the final things like extent, ticksm colorbar, legend title and saving the image
+            # 7. Wind / Current direction annotation
+            if wind_info is not None and idx < len(wind_info):
+                try:
+                    from wind_utils import annotate_wind_on_ax
+                    annotate_wind_on_ax(
+                        ax, wind_info[idx],
+                        [min_lon, max_lon, min_lat, max_lat],
+                        transform=ccrs.PlateCarree()
+                    )
+                except Exception as we:
+                    print(f"    ⚠️  Could not draw wind annotation: {we}")
+
             ax.set_extent([min_lon, max_lon, min_lat, max_lat])
             ax.set_xticks([], crs=ccrs.PlateCarree())
             ax.set_yticks([], crs=ccrs.PlateCarree())
@@ -441,7 +454,8 @@ def plot_combined(output_path,id_number,intervals, trajectories, centroids, ds_h
                              sighted_positions=None,
                              plot_beacon_track=True,plot_combined=True,plot_sighted_positions=True,
                              xylimit=True,reference_vector_length = 0.5, 
-                             output_prefix="seeding"):
+                             output_prefix="seeding",
+                             wind_info=None):
     
     import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize
@@ -552,7 +566,7 @@ def plot_combined(output_path,id_number,intervals, trajectories, centroids, ds_h
                     ax.plot(beacon_lon[m], beacon_lat[m], 'magenta', lw=1.5, label='Drifter')
 
                 # --- Currents (skip safely if not available) ---
-                if ds_hourly is not None:
+                if ds_hourly is not None and wind_info is None:
                     currentavg = ds_hourly.isel(TAXNEW=slice(start, end)).mean(dim='TAXNEW')
                     u_name = list(currentavg.data_vars)[0]
                     v_name = list(currentavg.data_vars)[1]
@@ -585,6 +599,20 @@ def plot_combined(output_path,id_number,intervals, trajectories, centroids, ds_h
                     ax.plot(sighted_positions[:, 0], sighted_positions[:, 1],
                             marker='^', color='brown', markersize=8,
                             linestyle='None', label='Sighted', transform=ccrs.PlateCarree())
+
+                # --- Wind / Current direction annotation ---
+                # global_interval_idx accounts for pagination (page_idx * images_per_page + idx)
+                global_interval_idx = page_idx * images_per_page + idx
+                if wind_info is not None and global_interval_idx < len(wind_info):
+                    try:
+                        from wind_utils import annotate_wind_on_ax
+                        annotate_wind_on_ax(
+                            ax, wind_info[global_interval_idx],
+                            [min_lon, max_lon, min_lat, max_lat],
+                            transform=ccrs.PlateCarree()
+                        )
+                    except Exception as we:
+                        print(f"    ⚠️  Could not draw wind annotation for interval {global_interval_idx}: {we}")
 
                 # --- Map extent, ticks, title ---
                 ax.set_title(f"Hours {start}-{end}", fontweight="bold")

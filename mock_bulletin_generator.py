@@ -221,13 +221,46 @@ if __name__ == "__main__":
 
     # Resolve the figure directory relative to this script
     script_dir  = os.path.dirname(os.path.abspath(__file__))
-    figure_dir  = os.path.join(script_dir,
-                                "sarat_new_visualization_changes",
-                                f"case{case}", "figure")
+    
+    candidate_1 = os.path.join(script_dir, "sarat_new_visualization_changes", f"case{case}", "figure")
+    candidate_2 = os.path.join(script_dir, f"case{case}", "figure")
+    candidate_3 = os.path.join(script_dir, str(case), "figure")
+    
+    if os.path.isdir(candidate_1):
+        figure_dir = candidate_1
+    elif os.path.isdir(candidate_2):
+        figure_dir = candidate_2
+    elif os.path.isdir(candidate_3):
+        figure_dir = candidate_3
+    else:
+        figure_dir = candidate_1
 
     if not os.path.isdir(figure_dir):
-        print(f"ERROR: figure directory not found: {figure_dir}")
+        print(f"ERROR: figure directory not found. Checked:")
+        print(f"  1. {candidate_1}")
+        print(f"  2. {candidate_2}")
+        print(f"  3. {candidate_3}")
         print("Run saratv3visuals.py first to generate outputs.")
         sys.exit(1)
 
-    generate_mock_bulletin(case, figure_dir)
+    # Extract dynamic LKP from userinput file if available
+    userinput_candidates = [
+        os.path.join(script_dir, "sarat_new_visualization_changes", f"case{case}", f"userinput_{case}.txt"),
+        os.path.join(script_dir, f"case{case}", f"userinput_{case}.txt"),
+        os.path.join(script_dir, str(case), f"userinput_{case}.txt"),
+    ]
+    lon_dd = 69.833
+    lat_dd = 22.580
+    for u_path in userinput_candidates:
+        if os.path.exists(u_path):
+            try:
+                with open(u_path) as _f:
+                    _parts = _f.read().strip().split()
+                lat_dd = float(_parts[1])
+                lon_dd = float(_parts[2])
+                print(f"Loaded LKP for case {case} from userinput: lon={lon_dd:.4f}, lat={lat_dd:.4f}")
+                break
+            except Exception as e:
+                print(f"Error parsing userinput file: {e}")
+
+    generate_mock_bulletin(case, figure_dir, lon_dd=lon_dd, lat_dd=lat_dd)
