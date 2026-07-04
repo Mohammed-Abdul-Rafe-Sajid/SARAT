@@ -12,36 +12,46 @@ import os
 import numpy as np
 
 # -------- CLI + fallback logic --------
-if len(sys.argv) >= 2:
-    id_number = int(sys.argv[1])
-else:
-    id_number = 6687
+# Original dynamic extraction:
+# if len(sys.argv) >= 2:
+#     id_number = int(sys.argv[1])
+# else:
+#     id_number = 6687
+
+# Hardcoded test case for manual verification:
+id_number = 6687
 
 # Base path of script
 base_path = os.path.dirname(os.path.abspath(__file__))
 
 # Input path (CLI or default)
-if len(sys.argv) >= 3:
-    inputpath = sys.argv[2]
-else:
-    # Look for candidate case directories:
-    # 1. Under sarat_new_visualization_changes/caseXXXX
-    # 2. Under root/caseXXXX
-    # 3. Under root/XXXX (unprefixed, e.g. root/6915)
-    candidate_1 = os.path.join(base_path, f"case{id_number}")
-    candidate_2 = os.path.join(os.path.dirname(base_path), f"case{id_number}")
-    candidate_3 = os.path.join(os.path.dirname(base_path), str(id_number))
-    
-    if os.path.exists(candidate_1):
-        inputpath = candidate_1
-    elif os.path.exists(candidate_2):
-        inputpath = candidate_2
-    elif os.path.exists(candidate_3):
-        inputpath = candidate_3
-    else:
-        inputpath = candidate_1
+# ORIGINAL DYNAMIC PATH RESOLUTION:
+# if len(sys.argv) >= 3:
+#     inputpath = sys.argv[2]
+# else:
+#     # Look for candidate case directories:
+#     # 1. Under sarat_new_visualization_changes/caseXXXX
+#     # 2. Under root/caseXXXX
+#     # 3. Under root/XXXX (unprefixed, e.g. root/6915)
+#     candidate_1 = os.path.join(base_path, f"case{id_number}")
+#     candidate_2 = os.path.join(os.path.dirname(base_path), f"case{id_number}")
+#     candidate_3 = os.path.join(os.path.dirname(base_path), str(id_number))
+#     
+#     if os.path.exists(candidate_1):
+#         inputpath = candidate_1
+#     elif os.path.exists(candidate_2):
+#         inputpath = candidate_2
+#     elif os.path.exists(candidate_3):
+#         inputpath = candidate_3
+#     else:
+#         inputpath = candidate_1
+# 
+# # Ensure absolute path
+# if not os.path.isabs(inputpath):
+#     inputpath = os.path.abspath(inputpath)
 
-# Ensure absolute path
+# Hardcoded input path for testing:
+inputpath = os.path.join(base_path, f"case{id_number}")
 if not os.path.isabs(inputpath):
     inputpath = os.path.abspath(inputpath)
 
@@ -229,7 +239,22 @@ index_data = create_geojson_index(geojson_filenames, intervals, id_number)
 index_filepath = os.path.join(inputpath, f"interval_index_{id_number}.json")
 save_geojson(index_data, index_filepath)
 
-print("✔ GeoJSON generation complete")
+# ── Generate current-vector sidecar for the Leaflet frontend ──────────
+from geojson_utils import create_current_vectors_json
+print("✔ Generating current-vector sidecar JSON ...")
+cv_data = create_current_vectors_json(
+    wind_info  = wind_info if wind_info else [],
+    prob_grids = prob_grids,
+    lon_bins   = lon_bins,
+    lat_bins   = lat_bins,
+    intervals  = intervals,
+    case_id    = id_number,
+    target_arrows = 12
+)
+cv_filepath = os.path.join(inputpath, f"current_vectors_{id_number}.json")
+save_geojson(cv_data, cv_filepath)
+print(f"  ✓ Saved {cv_filepath}")
+
 
 print("✔ Generating KML files...")
 import convert_to_kml

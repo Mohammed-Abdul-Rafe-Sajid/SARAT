@@ -14,6 +14,7 @@
         <script type="text/javascript" src="Js/vendors/leaflet-plugins/Control.FullScreen.js"></script>
         <link rel="stylesheet" type="text/css" href="Js/vendors/leaflet-0.7.3/leaflet.css">
         <script type='text/javascript' src="Js/vendors/leaflet-plugins/Leaflet.Coordinates-0.1.3.min.js"></script>
+
         <!-- <script src="https://unpkg.com/tokml/tokml.js"></script> -->
         <script src="Js/tokml.js"></script>
         <script src="Js/jszip.min.js"></script>
@@ -24,7 +25,9 @@
             }
         </style>
         <script type='text/javascript'>//<![CDATA[
+
             var marker = null, map = null;
+
             // FOR TESTING: Hardcoding case 6687
             // const uniqueId = '<%= request.getParameter("request_id")%>';
             const uniqueId = '6687';
@@ -249,38 +252,33 @@
                 lkpMarkerLayer.openPopup();
 
                 // Mean trajectory
-                // const meanTrajectoryGeoJsonFile = `data/meantrajectory_${uniqueId}.geojson`;
                 const meanTrajectoryGeoJsonFile = "data/meantrajectory_" + uniqueId + ".geojson";
                 response = await fetch(meanTrajectoryGeoJsonFile);
                 let meanTrajectoryGeoJson = await response.json();
 
-                const meanTrajectoryLayer = L.geoJson(meanTrajectoryGeoJson, {
+                const _meanTrajLayer = L.geoJson(meanTrajectoryGeoJson, {
                     onEachFeature: getPopupForMeanTrajectoryLayer,
                     style: getStyleForMeanTrajectoryLayer
                 });
                 
                 // All trajectories
-                //const allTrajectoriesGeoJsonFile = `data/trajectories_${uniqueId}.geojson`;
                 const allTrajectoriesGeoJsonFile = "data/trajectories_" + uniqueId + ".geojson";
                 response = await fetch(allTrajectoriesGeoJsonFile);
                 let allTrajectoriesGeoJson = await response.json();
 
-                const allTrajectoriesLayer = L.geoJson(allTrajectoriesGeoJson, {
+                const _allTrajLayer = L.geoJson(allTrajectoriesGeoJson, {
                     onEachFeature: getPopupForAllTrajectoriesLayer,
                     style: getStyleForAllTrajectoriesLayer
                 });
 
-                const overlayLayers = {
-                    'Mean Trajectory': meanTrajectoryLayer,
-                    'All Trajectories': allTrajectoriesLayer
-                };
+                // Store to module-level variables for switchVisualMode
+                meanTrajectoryLayer  = _meanTrajLayer;
+                allTrajectoriesLayer = _allTrajLayer;
 
-                const layerControl = L.control.layers({}, overlayLayers, { collapsed: false });
-                layerControl.addTo(map);
+                // Add to map by default
+                meanTrajectoryLayer.addTo(map);
+                allTrajectoriesLayer.addTo(map);
 
-                map.on("overlayadd", (layersControlEvent) => {
-                    layersControlEvent.layer.openPopup();
-                });
 
                 // Probability regions
                 const probabilityRegionsGeoJsonFile = "data/" + uniqueId + ".json";
@@ -302,6 +300,7 @@
                             onEachFeature: getPopUpForProbabilityRegion,
                     });                        
                     cdriftLayer.addTo(map);
+                    v2CdriftLayer = cdriftLayer; // store for mode switching
 
                     const cDriftLegend = L.control({
                         position: 'bottomright'
@@ -545,67 +544,252 @@
             }
 
             // ============================================
-            // HEATMAP INTERVAL CONTROL FUNCTIONS
+            // VISUAL MODE CONTROL (V2 / V3)
             // ============================================
             let currentMap = null;
-            let heatmapIndexData = null;
-            let heatmapVisible = false;
+            let heatmapIndexData = null;  // kept for KMZ download compatibility
 
-            // Load heatmap index file
-            async function initHeatmapIntervals() {
+            // Active layers tracking
+            let v2CdriftLayer  = null;    // V2 probability region layer
+            let v2LayerControl = null;    // V2 mean/all trajectory layer control
+            let meanTrajectoryLayer = null;
+            let allTrajectoriesLayer = null;
+
+            // V3 layers: keyed by interval index
+            let v3IntervalLayers = {};    // geoJSON layers per interval
+            let v3IndexData      = null;  // interval_index_{id}.json
+
+            let currentVisualMode = 'v2'; // 'v2' or 'v3'
+
+            // --------------------------------------------------
+            // Init: load V3 metadata on startup
+            // --------------------------------------------------
+            async function initVisualModeControl() {
+                var timestamp = new Date().getTime();
+                // Load V3 interval index
                 try {
-                    const response = await fetch('data/interval_index_' + uniqueId + '.json');
-                    if (!response.ok) {
-                        // Heatmap index not available, skip
-                        console.log('Heatmap index not available');
-                        return;
+                    const resp = await fetch('data/interval_index_' + uniqueId + '.json?t=' + timestamp);
+                    if (resp.ok) {
+                        v3IndexData    = await resp.json();
+                        heatmapIndexData = v3IndexData;  // KMZ download compat
+                        console.log('[V3] Interval index loaded:', v3IndexData.total_intervals, 'intervals');
                     }
-                    const indexData = await response.json();
-                    heatmapIndexData = indexData;
-                    populateIntervalSelector(indexData);
-                    document.getElementById('heatmapControls').style.display = 'block';
-                } catch (error) {
-                    console.log('Heatmap initialization skipped:', error);
-                }
+                } catch(e) { console.log('[V3] Interval index unavailable:', e); }
+
+                // Build the visual-mode Leaflet control
+                buildVisualModeControl();
             }
 
-            // Populate interval selector dropdown
-            function populateIntervalSelector(indexData) {
-                const selector = document.getElementById('intervalSelector');
-                if (!indexData.files || indexData.files.length === 0) {
-                    return;
-                }
+            // --------------------------------------------------
+            // Build visual mode control (Trajectories, V2/V3 radios, V3 interval check list)
+            // --------------------------------------------------
+            function buildVisualModeControl() {
+                var VisualModeControl = L.Control.extend({
+                    options: { position: 'topright' },
+                    onAdd: function(map) {
+                        var container = L.DomUtil.create('div', 'visual-mode-control');
+                        L.DomEvent.disableClickPropagation(container);
+                        L.DomEvent.disableScrollPropagation(container);
 
-                indexData.files.forEach((file, index) => {
-                    const option = document.createElement('option');
-                    option.value = file;
-                    let intervalStr = "Interval " + index;
-                    if (indexData.intervals && indexData.intervals[index]) {
-                        intervalStr = "Hours " + indexData.intervals[index][0] + " - " + indexData.intervals[index][1];
+                        container.innerHTML =
+                            '<div id="v2TrajectoryPanel">' +
+                              '<div class="vmc-title">Trajectories</div>' +
+                              '<label class="vmc-label"><input type="checkbox" id="cbMeanTraj" checked> Mean Trajectory</label>' +
+                              '<label class="vmc-label"><input type="checkbox" id="cbAllTraj" checked> All Trajectories</label>' +
+                              '<div style="margin-top:6px;border-top:1px solid #ccc;padding-top:4px;"></div>' +
+                            '</div>' +
+                            '<div class="vmc-title">Visual Mode</div>' +
+                            '<label class="vmc-label"><input type="radio" name="visualMode" id="radioV2" value="v2" checked> V2 Visual</label>' +
+                            '<label class="vmc-label"><input type="radio" name="visualMode" id="radioV3" value="v3"> V3 Visual</label>' +
+                            '<div id="v3IntervalPanel" style="display:none;margin-top:6px;border-top:1px solid #ccc;padding-top:6px;">' +
+                              '<div class="vmc-title" style="font-size:11px;">Time Intervals</div>' +
+                              '<div id="v3CheckboxList"></div>' +
+                            '</div>';
+
+                        // Checkbox listeners for Trajectories
+                        L.DomEvent.on(container.querySelector('#cbMeanTraj'), 'change', function() {
+                            if (currentVisualMode !== 'v2') return;
+                            if (this.checked) {
+                                if (meanTrajectoryLayer) meanTrajectoryLayer.addTo(currentMap);
+                            } else {
+                                if (meanTrajectoryLayer && currentMap.hasLayer(meanTrajectoryLayer)) currentMap.removeLayer(meanTrajectoryLayer);
+                            }
+                        });
+                        L.DomEvent.on(container.querySelector('#cbAllTraj'), 'change', function() {
+                            if (currentVisualMode !== 'v2') return;
+                            if (this.checked) {
+                                if (allTrajectoriesLayer) allTrajectoriesLayer.addTo(currentMap);
+                            } else {
+                                if (allTrajectoriesLayer && currentMap.hasLayer(allTrajectoriesLayer)) currentMap.removeLayer(allTrajectoriesLayer);
+                            }
+                        });
+
+                        // Populate V3 interval checkboxes
+                        if (v3IndexData && v3IndexData.files) {
+                            var listDiv = container.querySelector('#v3CheckboxList');
+                            v3IndexData.files.forEach(function(file, idx) {
+                                var label = 'Interval ' + idx;
+                                if (v3IndexData.intervals && v3IndexData.intervals[idx]) {
+                                    var iv = v3IndexData.intervals[idx];
+                                    label = 'Hours ' + iv[0] + ' – ' + iv[1];
+                                }
+                                var row = document.createElement('label');
+                                row.className = 'vmc-label';
+                                row.innerHTML = '<input type="checkbox" class="v3-interval-cb" data-file="' + file + '" data-idx="' + idx + '"> ' + label;
+                                listDiv.appendChild(row);
+                            });
+                            // Attach change handlers
+                            container.querySelectorAll('.v3-interval-cb').forEach(function(cb) {
+                                L.DomEvent.on(cb, 'change', function() {
+                                    var idx = parseInt(this.getAttribute('data-idx'));
+                                    var file = this.getAttribute('data-file');
+                                    console.log('[V3 Checkbox] Toggle: idx=' + idx + ', checked=' + this.checked);
+                                    if (this.checked) {
+                                        loadV3Interval(idx, file);
+                                    } else {
+                                        removeV3Interval(idx);
+                                    }
+                                });
+                            });
+                        } else {
+                            container.querySelector('#v3IntervalPanel').innerHTML +=
+                                '<div style="font-size:11px;color:#888;">No V3 data available</div>';
+                        }
+
+                        // Radio button handlers
+                        container.querySelector('#radioV2').addEventListener('change', function() {
+                            if (this.checked) switchVisualMode('v2');
+                        });
+                        container.querySelector('#radioV3').addEventListener('change', function() {
+                            if (this.checked) switchVisualMode('v3');
+                        });
+
+                        return container;
                     }
-                    option.textContent = intervalStr;
-                    selector.appendChild(option);
                 });
+
+                new VisualModeControl().addTo(currentMap);
             }
 
-            // Change heatmap interval
-            function changeHeatmapInterval(filepath) {
-                if (!filepath || !currentMap) return;
-                const actualPath = filepath.startsWith('data/') ? filepath : 'data/' + filepath;
-                loadHeatmapInterval(actualPath, currentMap);
-            }
+            // --------------------------------------------------
+            // Switch visual mode
+            // --------------------------------------------------
+            function switchVisualMode(mode) {
+                currentVisualMode = mode;
+                console.log('[VisualMode] Switch to:', mode);
+                if (mode === 'v2') {
+                    // Show V2 layers based on Trajectories checkboxes state
+                    var meanChecked = document.getElementById('cbMeanTraj').checked;
+                    var allChecked = document.getElementById('cbAllTraj').checked;
 
-            // Toggle heatmap layer visibility
-            function toggleHeatmapLayer() {
-                if (!heatmapGeoLayer || !currentMap) return;
-                
-                if (heatmapVisible) {
-                    currentMap.removeLayer(heatmapGeoLayer);
-                    heatmapVisible = false;
+                    if (meanChecked && meanTrajectoryLayer) meanTrajectoryLayer.addTo(currentMap);
+                    if (allChecked && allTrajectoriesLayer) allTrajectoriesLayer.addTo(currentMap);
+                    if (v2CdriftLayer) v2CdriftLayer.addTo(currentMap);
+
+                    // Show V2 panel, hide V3 panel
+                    var trajPanel = document.getElementById('v2TrajectoryPanel');
+                    if (trajPanel) trajPanel.style.display = 'block';
+                    var panel = document.getElementById('v3IntervalPanel');
+                    if (panel) panel.style.display = 'none';
+
+                    // Clear V3 interval and velocity animation layers
+                    clearAllV3Layers();
                 } else {
-                    heatmapGeoLayer.addTo(currentMap);
-                    heatmapVisible = true;
+                    // Hide V2 layers
+                    if (v2CdriftLayer && currentMap.hasLayer(v2CdriftLayer)) currentMap.removeLayer(v2CdriftLayer);
+                    if (meanTrajectoryLayer && currentMap.hasLayer(meanTrajectoryLayer)) currentMap.removeLayer(meanTrajectoryLayer);
+                    if (allTrajectoriesLayer && currentMap.hasLayer(allTrajectoriesLayer)) currentMap.removeLayer(allTrajectoriesLayer);
+
+                    // Hide V2 panel, show V3 panel
+                    var trajPanel = document.getElementById('v2TrajectoryPanel');
+                    if (trajPanel) trajPanel.style.display = 'none';
+                    var panel = document.getElementById('v3IntervalPanel');
+                    if (panel) panel.style.display = 'block';
                 }
+            }
+
+            // --------------------------------------------------
+            // V3: Load a single interval GeoJSON + arrows
+            // --------------------------------------------------
+            async function loadV3Interval(idx, filename) {
+                if (!currentMap) return;
+                console.log('[V3 Interval] loadV3Interval called for idx=' + idx + ' file=' + filename);
+                // Remove old if exists
+                removeV3Interval(idx);
+
+                var filePath = filename.startsWith('data/') ? filename : 'data/' + filename;
+                filePath += '?t=' + new Date().getTime();
+                try {
+                    var resp = await fetch(filePath);
+                    if (!resp.ok) { console.warn('[V3] Could not load', filePath); return; }
+                    var geojson = await resp.json();
+
+                    var layer = L.geoJson(geojson, {
+                        style: function(feature) {
+                            if (feature.properties && feature.properties.type === 'bounding_box') {
+                                return { color: '#1a6b9a', weight: 2, fillOpacity: 0, opacity: 0.8, dashArray: '5,4' };
+                            }
+                            // grid cell - colour by probability
+                            var prob = feature.properties.normalized_probability || 0;
+                            return {
+                                color: 'none',
+                                weight: 0,
+                                fillColor: getV3ProbColor(prob),
+                                fillOpacity: 0.75
+                            };
+                        },
+                        onEachFeature: function(feature, lyr) {
+                            if (feature.properties) {
+                                var type = feature.properties.type || 'cell';
+                                if (type === 'bounding_box') {
+                                    lyr.bindPopup('Interval: ' + (feature.properties.interval || '') +
+                                                  '<br>Max prob: ' + (feature.properties.max_probability || '') +
+                                                  '<br>Points: ' + (feature.properties.points_included || ''));
+                                } else {
+                                    lyr.bindPopup('Probability: ' +
+                                                  ((feature.properties.probability_percent || 0).toFixed(2)) + '%' +
+                                                  '<br>Interval: ' + (feature.properties.interval || ''));
+                                }
+                            }
+                        }
+                    }).addTo(currentMap);
+
+                    v3IntervalLayers[idx] = layer;
+
+                } catch(e) { console.error('[V3] Error loading interval', idx, e); }
+            }
+
+            // --------------------------------------------------
+            // V3: Probability → colour mapping
+            // --------------------------------------------------
+            function getV3ProbColor(normProb) {
+                // Colour ramp: light blue → deep blue
+                var p = Math.max(0, Math.min(1, normProb));
+                if (p < 0.2)  return '#e0f3f8';
+                if (p < 0.4)  return '#abd9e9';
+                if (p < 0.6)  return '#74add1';
+                if (p < 0.75) return '#4575b4';
+                if (p < 0.9)  return '#313695';
+                return '#0d1057';
+            }
+
+            // --------------------------------------------------
+            // V3: Remove a single interval's layers
+            // --------------------------------------------------
+            function removeV3Interval(idx) {
+                if (v3IntervalLayers[idx]) {
+                    currentMap.removeLayer(v3IntervalLayers[idx]);
+                    delete v3IntervalLayers[idx];
+                }
+            }
+
+            // --------------------------------------------------
+            // V3: Clear all interval layers
+            // --------------------------------------------------
+            function clearAllV3Layers() {
+                Object.keys(v3IntervalLayers).forEach(function(idx) { removeV3Interval(parseInt(idx)); });
+                // Uncheck all checkboxes
+                document.querySelectorAll('.v3-interval-cb').forEach(function(cb) { cb.checked = false; });
             }
 
             window.onload = function () {
@@ -642,7 +826,10 @@
                 });
                 pdfdownload.onAdd = function (map) {
                     var div = L.DomUtil.create('div', 'info legend');
-                    div.innerHTML += '<h3 style="background-color:#ffffff;font-size:25px;font-style: bolder"><a style="font-color:red;" role="button" href="data/pdf/bulletein-<%=request.getParameter("request_id")%>.pdf" target="_blank">Click Here to Download</a></h3>';
+                    // ORIGINAL DYNAMIC PATH:
+                    // div.innerHTML += '<h3 style="background-color:#ffffff;font-size:25px;font-style: bolder"><a style="font-color:red;" role="button" href="data/pdf/bulletein-<%=request.getParameter("request_id")%>.pdf" target="_blank">Click Here to Download</a></h3>';
+                    // HARDCODED PATH FOR TESTING CASE 6687:
+                    div.innerHTML += '<h3 style="background-color:#ffffff;font-size:25px;font-style: bolder"><a style="font-color:red;" role="button" href="data/pdf/bulletein-6687.pdf" target="_blank">Click Here to Download</a></h3>';
                     return div;
                 };
                 pdfdownload.addTo(map);
@@ -655,8 +842,8 @@
                 // Load probability regions and other data
                 loadDataToMap(map);
                 
-                // Initialize heatmap interval selector
-                initHeatmapIntervals();
+                // Initialize V2/V3 visual mode control
+                initVisualModeControl();
 
                 map.on('mousemove', function (e) {                   
                     if (popup != null)
@@ -740,6 +927,59 @@
             .legend li.p100{
                 background-color: rgb(0, 0, 0);
             }
+
+            /* ---- V2/V3 Visual Mode Control ---- */
+            .visual-mode-control {
+                background: white;
+                border-radius: 6px;
+                box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+                padding: 8px 12px;
+                min-width: 148px;
+                font-family: Arial, sans-serif;
+                font-size: 13px;
+            }
+            .vmc-title {
+                font-weight: bold;
+                font-size: 12px;
+                color: #005680;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                margin-bottom: 5px;
+            }
+            .vmc-label {
+                display: block;
+                cursor: pointer;
+                margin: 3px 0;
+                color: #333;
+                font-size: 12px;
+                line-height: 1.6;
+                white-space: nowrap;
+            }
+            .vmc-label input {
+                margin-right: 5px;
+                cursor: pointer;
+            }
+            #v3CheckboxList {
+                max-height: 220px;
+                overflow-y: auto;
+                padding-right: 2px;
+            }
+            /* Speed label marker */
+            .v3-speed-label {
+                background: transparent;
+                border: none;
+                white-space: nowrap;
+            }
+            .v3-speed-label span {
+                background: rgba(255,255,255,0.85);
+                border: 1px solid #003580;
+                border-radius: 3px;
+                padding: 1px 5px;
+                font-size: 10px;
+                font-weight: bold;
+                color: #003580;
+            }
+
         </style>
     </head>
     <body>
@@ -780,10 +1020,10 @@
                     </div> 
                     <div align="right" style="font-size: 18px; text-decoration:blink;font-weight: 600;color:red;">
                       <!-- <marquee> <a style="color:red;font-style: bolder" role="button" href="data/pdf/bulletein-<%=request.getParameter("request_id")%>.pdf" target="_blank">Click Here to download Advisory</a></marquee> -->
-                      <marquee>
-                        <a style="color:red;font-style: bolder" role="button" href="data/pdf/bulletein-<%=request.getParameter("request_id")%>.pdf" target="_blank">Click Here to download Advisory</a>
-                        <!-- <a style="color:red;font-style: bolder" role="button" id="kmldownloadlink" target="_blank">Click Here to download KML</a> -->
-                      </marquee>
+                        <!-- ORIGINAL DYNAMIC PATH: -->
+                        <!-- <a style="color:red;font-style: bolder" role="button" href="data/pdf/bulletein-<%=request.getParameter("request_id")%>.pdf" target="_blank">Click Here to download Advisory</a> -->
+                        <!-- HARDCODED PATH FOR TESTING CASE 6687: -->
+                        <a style="color:red;font-style: bolder" role="button" href="data/pdf/bulletein-6687.pdf" target="_blank">Click Here to download Advisory</a>
 <!--                        //<marquee> <a style="color:red;font-style: bolder" role="button" href="http://172.30.2.77/sarat/data/pdf/bulletein-<%=request.getParameter("request_id")%>.pdf" target="_blank">Click Here to download Advisory</a></marquee>-->
                     </div>
                     <div style="float:center;width:100%;padding-bottom: 20px">
@@ -791,14 +1031,7 @@
                             // System.out.println(request.getParameter("request_id"));
                             System.out.println("TESTING MODE: uniqueId forced to 6687");
                         %>
-                        <!-- Heatmap Interval Selector (Optional) -->
-                        <div id="heatmapControls" style="margin-bottom: 10px; display: none;">
-                            <label for="intervalSelector" style="font-weight: bold; margin-right: 10px;">Load Heatmap Interval:</label>
-                            <select id="intervalSelector" onchange="changeHeatmapInterval(this.value)" style="padding: 5px; font-size: 14px;">
-                                <option value="">-- Select Interval --</option>
-                            </select>
-                            <button onclick="toggleHeatmapLayer()" style="padding: 5px 10px; margin-left: 10px;">Toggle Heatmap</button>
-                        </div>
+                        <!-- V3 mode replaces the old heatmap dropdown; interval panel is inside the Leaflet control -->
                         <div id="map" style="height:80%; width:100%;"></div>
                     </div>
                 </div>
