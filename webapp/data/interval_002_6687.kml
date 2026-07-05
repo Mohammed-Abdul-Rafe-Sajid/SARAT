@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+<Style id="style_0">
+<LineStyle><color>ff0000ff</color><width>3</width></LineStyle>
+<PolyStyle><color>00ffffff</color></PolyStyle>
+</Style>
+<Placemark>
+<name>bounding_box</name>
+<description>Probability: 31.6171%</description>
+<styleUrl>#style_0</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.599999,22.45,0 69.999999,22.45,0 69.999999,22.75,0 69.599999,22.75,0 69.599999,22.45,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_1">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ffa0edff</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 0.1609%</description>
+<styleUrl>#style_1</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.599999,22.45,0 69.699999,22.45,0 69.699999,22.55,0 69.599999,22.55,0 69.599999,22.45,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_2">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff4cb2fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 9.5736%</description>
+<styleUrl>#style_2</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.699999,22.45,0 69.799999,22.45,0 69.799999,22.55,0 69.699999,22.55,0 69.699999,22.45,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_3">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff2a4efc</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 21.6814%</description>
+<styleUrl>#style_3</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.799999,22.45,0 69.899999,22.45,0 69.899999,22.55,0 69.799999,22.55,0 69.799999,22.45,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_4">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff76d9fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 1.1665%</description>
+<styleUrl>#style_4</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.899999,22.45,0 69.999999,22.45,0 69.999999,22.55,0 69.899999,22.55,0 69.899999,22.45,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_5">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ffa0edff</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 0.885%</description>
+<styleUrl>#style_5</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.599999,22.55,0 69.699999,22.55,0 69.699999,22.65,0 69.599999,22.65,0 69.599999,22.55,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_6">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff2a4efc</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 21.5205%</description>
+<styleUrl>#style_6</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.699999,22.55,0 69.799999,22.55,0 69.799999,22.65,0 69.699999,22.65,0 69.699999,22.55,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_7">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff1c1ae3</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 31.6171%</description>
+<styleUrl>#style_7</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.799999,22.55,0 69.899999,22.55,0 69.899999,22.65,0 69.799999,22.65,0 69.799999,22.55,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_8">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff4cb2fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 6.3958%</description>
+<styleUrl>#style_8</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.899999,22.55,0 69.999999,22.55,0 69.999999,22.65,0 69.899999,22.65,0 69.899999,22.55,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_9">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff76d9fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 1.971%</description>
+<styleUrl>#style_9</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.699999,22.65,0 69.799999,22.65,0 69.799999,22.75,0 69.699999,22.75,0 69.699999,22.65,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_10">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff76d9fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 4.2237%</description>
+<styleUrl>#style_10</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.799999,22.65,0 69.899999,22.65,0 69.899999,22.75,0 69.799999,22.75,0 69.799999,22.65,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_11">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ffa0edff</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 0.8045%</description>
+<styleUrl>#style_11</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.899999,22.65,0 69.999999,22.65,0 69.999999,22.75,0 69.899999,22.75,0 69.899999,22.65,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_12">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff4cb2fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 9.573612228479485%</description>
+<styleUrl>#style_12</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.699999,22.45,0 69.799999,22.45,0 69.799999,22.55,0 69.699999,22.55,0 69.699999,22.45,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_13">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff2a4efc</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 21.68141592920354%</description>
+<styleUrl>#style_13</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.799999,22.45,0 69.899999,22.45,0 69.899999,22.55,0 69.799999,22.55,0 69.799999,22.45,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_14">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff2a4efc</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 21.520514883346742%</description>
+<styleUrl>#style_14</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.699999,22.55,0 69.799999,22.55,0 69.799999,22.65,0 69.699999,22.65,0 69.699999,22.55,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_15">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff1c1ae3</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 31.61705551086082%</description>
+<styleUrl>#style_15</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.799999,22.55,0 69.899999,22.55,0 69.899999,22.65,0 69.799999,22.65,0 69.799999,22.55,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_16">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff4cb2fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 6.395816572807724%</description>
+<styleUrl>#style_16</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.899999,22.55,0 69.999999,22.55,0 69.999999,22.65,0 69.899999,22.65,0 69.899999,22.55,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_17">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff76d9fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 1.9710378117457763%</description>
+<styleUrl>#style_17</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.699999,22.65,0 69.799999,22.65,0 69.799999,22.75,0 69.699999,22.75,0 69.699999,22.65,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+<Style id="style_18">
+<LineStyle><color>ff000000</color><width>1</width></LineStyle>
+<PolyStyle><color>ff76d9fe</color></PolyStyle>
+</Style>
+<Placemark>
+<name>grid_cell</name>
+<description>Probability: 4.223652453740949%</description>
+<styleUrl>#style_18</styleUrl>
+<Polygon><outerBoundaryIs><LinearRing><coordinates>
+69.799999,22.65,0 69.899999,22.65,0 69.899999,22.75,0 69.799999,22.75,0 69.799999,22.65,0
+</coordinates></LinearRing></outerBoundaryIs></Polygon>
+</Placemark>
+</Document></kml>

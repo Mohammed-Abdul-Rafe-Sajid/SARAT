@@ -355,7 +355,160 @@ def create_geojson_index(geojson_files, intervals, case_id):
     return index
 
 
+def create_current_vectors_json(wind_info, prob_grids, lon_bins, lat_bins, intervals, case_id,
+                                 target_arrows=12):
+    """
+    Generate a current-vector sidecar JSON for Leaflet rendering.
+    Exports structured GRIB JSON format for leaflet-velocity.
+
+    Parameters
+    ----------
+    wind_info   : list of dicts from wind_utils.compute_interval_wind
+    prob_grids  : list of 2-D np.ndarray (one per interval)
+    lon_bins    : 1-D np.ndarray – longitude bin edges
+    lat_bins    : 1-D np.ndarray – latitude bin edges
+    intervals   : list of (start, end) hour tuples
+    case_id     : int or str
+    target_arrows : int – ignored (used full subset grid for leaflet-velocity)
+
+    Returns
+    -------
+    dict  ready to json.dump as  current_vectors_{case_id}.json
+    """
+    import datetime
+
+    intervals_data = []
+
+    for idx, (start, end) in enumerate(intervals):
+        winfo = wind_info[idx] if idx < len(wind_info) else None
+        interval_label = f"{start:.0f}-{end:.0f}h"
+
+        # ----------------------------------------------------------
+        # Derive bbox from probability grid
+        # ----------------------------------------------------------
+        bbox = {"min_lon": None, "max_lon": None, "min_lat": None, "max_lat": None}
+        if idx < len(prob_grids):
+            pg = prob_grids[idx]
+            threshold_abs = float(np.max(pg)) * 0.05 if pg.size > 0 else 0
+            for i in range(pg.shape[0]):
+                for j in range(pg.shape[1]):
+                    if pg[i, j] > threshold_abs:
+                        lo = float(lon_bins[j])
+                        hi_lo = float(lon_bins[j + 1])
+                        la = float(lat_bins[i])
+                        hi_la = float(lat_bins[i + 1])
+                        if bbox["min_lon"] is None or lo < bbox["min_lon"]:
+                            bbox["min_lon"] = lo
+                        if bbox["max_lon"] is None or hi_lo > bbox["max_lon"]:
+                            bbox["max_lon"] = hi_lo
+                        if bbox["min_lat"] is None or la < bbox["min_lat"]:
+                            bbox["min_lat"] = la
+                        if bbox["max_lat"] is None or hi_la > bbox["max_lat"]:
+                            bbox["max_lat"] = hi_la
+
+        velocity_grib = None
+        lkp_speed = None
+        valid = False
+
+        if winfo is not None and winfo.get("valid", False):
+            lkp_speed = float(winfo.get("speed", 0.0))
+            u_2d    = winfo.get("u_field_2d")
+            v_2d    = winfo.get("v_field_2d")
+            lon_arr = winfo.get("lon_arr")
+            lat_arr = winfo.get("lat_arr")
+
+            if u_2d is not None and lon_arr is not None and bbox["min_lon"] is not None:
+                # Subset to bbox with a small buffer of 0.2 degrees to prevent edge interpolation issues in leaflet-velocity
+                buf = 0.2
+                lon_mask = (lon_arr >= (bbox["min_lon"] - buf)) & (lon_arr <= (bbox["max_lon"] + buf))
+                lat_mask = (lat_arr >= (bbox["min_lat"] - buf)) & (lat_arr <= (bbox["max_lat"] + buf))
+
+                lon_sub = lon_arr[lon_mask]
+                lat_sub = lat_arr[lat_mask]
+
+                # Ensure dimensions are valid
+                if lon_sub.size > 1 and lat_sub.size > 1:
+                    u_sub = u_2d[np.ix_(np.where(lat_mask)[0], np.where(lon_mask)[0])]
+                    v_sub = v_2d[np.ix_(np.where(lat_mask)[0], np.where(lon_mask)[0])]
+
+                    nx = int(lon_sub.size)
+                    ny = int(lat_sub.size)
+                    lo1 = float(lon_sub[0])
+                    lo2 = float(lon_sub[-1])
+                    la1 = float(lat_sub[-1]) # Top latitude (North)
+                    la2 = float(lat_sub[0])  # Bottom latitude (South)
+                    dx = float((lo2 - lo1) / (nx - 1))
+                    dy = float((la1 - la2) / (ny - 1))
+
+                    # Row-major ordering: from North to South, West to East
+                    u_data = []
+                    v_data = []
+                    for r in range(ny - 1, -1, -1):
+                        for c in range(nx):
+                            u_val = u_sub[r, c]
+                            v_val = v_sub[r, c]
+                            # Fill NaNs with 0.0 so leaflet-velocity doesn't break
+                            u_data.append(0.0 if np.isnan(u_val) else float(u_val))
+                            v_data.append(0.0 if np.isnan(v_val) else float(v_val))
+
+                    # Build GRIB JSON array
+                    velocity_grib = [
+                        {
+                            "header": {
+                                "parameterCategory": 2,
+                                "parameterNumber": 2,
+                                "parameterUnit": "m.s-1",
+                                "nx": nx,
+                                "ny": ny,
+                                "lo1": lo1,
+                                "la1": la1,
+                                "lo2": lo2,
+                                "la2": la2,
+                                "dx": dx,
+                                "dy": dy
+                            },
+                            "data": u_data
+                        },
+                        {
+                            "header": {
+                                "parameterCategory": 2,
+                                "parameterNumber": 3,
+                                "parameterUnit": "m.s-1",
+                                "nx": nx,
+                                "ny": ny,
+                                "lo1": lo1,
+                                "la1": la1,
+                                "lo2": lo2,
+                                "la2": la2,
+                                "dx": dx,
+                                "dy": dy
+                            },
+                            "data": v_data
+                        }
+                    ]
+                    valid = True
+
+        intervals_data.append({
+            "interval_idx":   idx,
+            "interval_label": interval_label,
+            "start_h":        int(start),
+            "end_h":          int(end),
+            "bbox":           bbox,
+            "lkp_speed_ms":   lkp_speed,
+            "valid":          valid,
+            "velocity_grib":  velocity_grib
+        })
+
+    return {
+        "version":   "1.0",
+        "case_id":   str(case_id),
+        "generated": datetime.datetime.now().isoformat(),
+        "intervals": intervals_data
+    }
+
+
 if __name__ == "__main__":
+
     """
     Quick test of convex hull generation
     """
