@@ -556,8 +556,10 @@
             let allTrajectoriesLayer = null;
 
             // V3 layers: keyed by interval index
-            let v3IntervalLayers = {};    // geoJSON layers per interval
-            let v3IndexData      = null;  // interval_index_{id}.json
+            let v3IntervalLayers = {};      // geoJSON layers per interval
+            let v3ArrowLayers    = {};      // Leaflet LayerGroup of arrow markers per interval
+            let v3IndexData      = null;    // interval_index_{id}.json
+            let currentVectorData = null;   // current_vectors_{id}.json (loaded once)
 
             let currentVisualMode = 'v2'; // 'v2' or 'v3'
 
@@ -709,14 +711,36 @@
             }
 
             // --------------------------------------------------
-            // V3: Load a single interval GeoJSON + arrows
+            // V3: Load current_vectors data once (cached)
+            // --------------------------------------------------
+            async function ensureCurrentVectorData() {
+                if (currentVectorData) return currentVectorData;
+                try {
+                    var resp = await fetch('data/current_vectors_' + uniqueId + '.json?t=' + new Date().getTime());
+                    if (resp.ok) {
+                        currentVectorData = await resp.json();
+                        console.log('[V3] Current vector data loaded, intervals:', currentVectorData.intervals.length);
+                    } else {
+                        console.warn('[V3] current_vectors file not found');
+                        currentVectorData = null;
+                    }
+                } catch(e) {
+                    console.warn('[V3] Could not load current_vectors:', e);
+                    currentVectorData = null;
+                }
+                return currentVectorData;
+            }
+
+            // --------------------------------------------------
+            // V3: Load a single interval GeoJSON + current-direction arrows
             // --------------------------------------------------
             async function loadV3Interval(idx, filename) {
                 if (!currentMap) return;
                 console.log('[V3 Interval] loadV3Interval called for idx=' + idx + ' file=' + filename);
-                // Remove old if exists
+                // Remove old layers if exists
                 removeV3Interval(idx);
 
+                // ── 1. Load interval GeoJSON (probability cells + bounding box) ──
                 var filePath = filename.startsWith('data/') ? filename : 'data/' + filename;
                 filePath += '?t=' + new Date().getTime();
                 try {
@@ -727,9 +751,8 @@
                     var layer = L.geoJson(geojson, {
                         style: function(feature) {
                             if (feature.properties && feature.properties.type === 'bounding_box') {
-                                return { color: '#1a6b9a', weight: 2, fillOpacity: 0, opacity: 0.8, dashArray: '5,4' };
+                                return { color: '#1a6b9a', weight: 2.5, fillOpacity: 0, opacity: 0.9, dashArray: '6,4' };
                             }
-                            // grid cell - colour by probability
                             var prob = feature.properties.normalized_probability || 0;
                             return {
                                 color: 'none',
@@ -756,7 +779,151 @@
 
                     v3IntervalLayers[idx] = layer;
 
-                } catch(e) { console.error('[V3] Error loading interval', idx, e); }
+                } catch(e) { console.error('[V3] Error loading interval GeoJSON', idx, e); }
+
+                // ── 2. Load current direction arrows ──
+                try {
+                    var cvData = await ensureCurrentVectorData();
+                    if (cvData && cvData.intervals) {
+                        var ivData = null;
+                        for (var i = 0; i < cvData.intervals.length; i++) {
+                            if (cvData.intervals[i].interval_idx === idx) {
+                                ivData = cvData.intervals[i];
+                                break;
+                            }
+                        }
+                        if (ivData && ivData.valid && ivData.velocity_grib && ivData.velocity_grib.length >= 2) {
+                            var arrowGroup = buildCurrentArrowLayer(ivData);
+                            if (arrowGroup) {
+                                arrowGroup.addTo(currentMap);
+                                v3ArrowLayers[idx] = arrowGroup;
+                            }
+                        }
+                    }
+                } catch(e) { console.error('[V3] Error drawing current arrows for interval', idx, e); }
+            }
+
+            // --------------------------------------------------
+            // V3: Build Leaflet LayerGroup of arrow markers for an interval
+            // --------------------------------------------------
+            function buildCurrentArrowLayer(ivData) {
+                var uGrid = null, vGrid = null;
+                for (var k = 0; k < ivData.velocity_grib.length; k++) {
+                    var g = ivData.velocity_grib[k];
+                    if (g.header.parameterNumber === 2) uGrid = g; // U east-west
+                    if (g.header.parameterNumber === 3) vGrid = g; // V north-south
+                }
+                if (!uGrid || !vGrid) {
+                    console.warn('[V3 Arrows] Missing U or V grid for interval', ivData.interval_idx);
+                    return null;
+                }
+
+                var h = uGrid.header;
+                var nx = h.nx, ny = h.ny;
+                var lo1 = h.lo1, la1 = h.la1; // top-left corner
+                var dx  = h.dx,  dy  = h.dy;  // grid spacing (positive)
+
+                // Bounding box with a margin for arrows slightly outside the hull
+                var bbox = ivData.bbox;
+                var margin = Math.max(dy * 2, dx * 2, 0.25); // ~2 grid cells margin
+                var bLon1 = bbox.min_lon - margin;
+                var bLon2 = bbox.max_lon + margin;
+                var bLat1 = bbox.min_lat - margin;
+                var bLat2 = bbox.max_lat + margin;
+
+                // Compute max speed for normalisation (skip zeros)
+                var maxSpeed = 0;
+                for (var i = 0; i < uGrid.data.length; i++) {
+                    var sp = Math.sqrt(uGrid.data[i] * uGrid.data[i] + vGrid.data[i] * vGrid.data[i]);
+                    if (sp > maxSpeed) maxSpeed = sp;
+                }
+                if (maxSpeed < 1e-6) maxSpeed = 1; // avoid division by zero
+
+                var group = L.layerGroup();
+
+                // Thinning: only render every Nth grid point to keep density sane
+                // Target ~4-8 arrows per grid span; thin if grid is very fine
+                var step = Math.max(1, Math.round(Math.min(nx, ny) / 8));
+
+                for (var row = 0; row < ny; row += step) {
+                    for (var col = 0; col < nx; col += step) {
+                        var gridIdx = row * nx + col;
+                        var u = uGrid.data[gridIdx];
+                        var v = vGrid.data[gridIdx];
+                        var speed = Math.sqrt(u * u + v * v);
+
+                        // Skip zero-speed points
+                        if (speed < 1e-4) continue;
+
+                        // Reconstruct lat/lon: la1 is top (north), lat decreases downward
+                        var lon = lo1 + col * dx;
+                        var lat = la1 - row * dy;
+
+                        // Only draw within bounding box + margin
+                        if (lon < bLon1 || lon > bLon2 || lat < bLat1 || lat > bLat2) continue;
+
+                        // Arrow angle: oceanographic convention
+                        // u = east (positive = eastward), v = north (positive = northward)
+                        // SVG angle: 0 = up, clockwise positive
+                        // Math angle from north clockwise: atan2(u, v)
+                        var angleDeg = Math.atan2(u, v) * 180 / Math.PI;
+
+                        // Normalised speed [0..1] for visual scaling
+                        var normSpeed = speed / maxSpeed;
+
+                        var marker = makeArrowMarker(lat, lon, angleDeg, normSpeed, speed);
+                        group.addLayer(marker);
+                    }
+                }
+
+                return group;
+            }
+
+            // --------------------------------------------------
+            // V3: Create a single arrow DivIcon marker
+            // --------------------------------------------------
+            function makeArrowMarker(lat, lon, angleDeg, normSpeed, speedMs) {
+                // Arrow size: 24px base, slightly larger for fast currents
+                var arrowLen = Math.round(22 + normSpeed * 10); // 22-32 px
+                var half = Math.round(arrowLen / 2);
+
+                // Colour: slow=cyan, medium=royalblue, fast=darkblue
+                var arrowColor;
+                if (normSpeed < 0.33)      arrowColor = '#00bcd4'; // cyan
+                else if (normSpeed < 0.66) arrowColor = '#1565c0'; // royal blue
+                else                       arrowColor = '#0d47a1'; // dark blue
+
+                // SVG arrow pointing UP by default, rotated by angleDeg
+                var svgSize = arrowLen + 10;
+                var cx = svgSize / 2;
+                var tipY = 2;
+                var tailY = svgSize - 4;
+                var hw = 5;  // half-width of arrowhead
+                var sw = 2.5; // shaft width
+
+                var svg =
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgSize + '" height="' + svgSize + '" ' +
+                    'style="transform:rotate(' + angleDeg.toFixed(1) + 'deg);overflow:visible;">' +
+                    // Shaft
+                    '<line x1="' + cx + '" y1="' + tipY + '" x2="' + cx + '" y2="' + tailY + '" ' +
+                    'stroke="' + arrowColor + '" stroke-width="' + sw + '" stroke-linecap="round"/>' +
+                    // Arrowhead (filled triangle at tip)
+                    '<polygon points="' +
+                      cx + ',' + tipY + ' ' +
+                      (cx - hw) + ',' + (tipY + hw * 2) + ' ' +
+                      (cx + hw) + ',' + (tipY + hw * 2) + '" ' +
+                    'fill="' + arrowColor + '"/>' +
+                    '</svg>';
+
+                var icon = L.divIcon({
+                    className: 'v3-current-arrow',
+                    html: svg,
+                    iconSize:   [svgSize, svgSize],
+                    iconAnchor: [cx, svgSize / 2]
+                });
+
+                var marker = L.marker([lat, lon], { icon: icon, interactive: false });
+                return marker;
             }
 
             // --------------------------------------------------
@@ -781,6 +948,10 @@
                     currentMap.removeLayer(v3IntervalLayers[idx]);
                     delete v3IntervalLayers[idx];
                 }
+                if (v3ArrowLayers[idx]) {
+                    currentMap.removeLayer(v3ArrowLayers[idx]);
+                    delete v3ArrowLayers[idx];
+                }
             }
 
             // --------------------------------------------------
@@ -788,6 +959,7 @@
             // --------------------------------------------------
             function clearAllV3Layers() {
                 Object.keys(v3IntervalLayers).forEach(function(idx) { removeV3Interval(parseInt(idx)); });
+                Object.keys(v3ArrowLayers).forEach(function(idx) { removeV3Interval(parseInt(idx)); });
                 // Uncheck all checkboxes
                 document.querySelectorAll('.v3-interval-cb').forEach(function(cb) { cb.checked = false; });
             }
@@ -978,6 +1150,14 @@
                 font-size: 10px;
                 font-weight: bold;
                 color: #003580;
+            }
+            /* Current direction arrow markers */
+            .v3-current-arrow {
+                background: transparent !important;
+                border: none !important;
+                pointer-events: none;
+                /* filter gives the arrows a slight drop-shadow for contrast */
+                filter: drop-shadow(0px 0px 1.5px rgba(255,255,255,0.8));
             }
 
         </style>
