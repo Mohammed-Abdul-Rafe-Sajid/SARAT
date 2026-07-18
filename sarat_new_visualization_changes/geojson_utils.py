@@ -6,8 +6,14 @@ Handles convex hull computation and GeoJSON polygon generation
 """
 
 import json
+import os
+
 import numpy as np
 from scipy.spatial import ConvexHull
+
+# Configurable cumulative-probability threshold for interval footprint selection.
+# Cells are ranked by probability and retained until the cumulative mass reaches this fraction.
+CUMULATIVE_PROBABILITY_THRESHOLD = 0.95
 
 
 def truncate(val):
@@ -32,7 +38,391 @@ def round_coord(value):
     return float(s)
 
 
-def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=0.05, max_prob_global=None):
+def load_hull_points_from_file(hull_path):
+    """Load V2 hull points from an ASCII hull file."""
+    if not hull_path or not os.path.exists(hull_path):
+        return None
+
+    points = []
+    try:
+        with open(hull_path, "r") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    points.append([float(parts[0]), float(parts[1])])
+    except Exception:
+        return None
+
+    if not points:
+        return None
+
+    arr = np.asarray(points, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        return None
+
+    return arr
+
+
+def _normalize_polygon(points):
+    """Remove duplicate and degenerate points and return a clean polygon array."""
+    if points is None:
+        return None
+
+    arr = np.asarray(points, dtype=float)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        return None
+
+    cleaned = []
+    for point in arr:
+        if not cleaned or not np.allclose(cleaned[-1], point):
+            cleaned.append(point)
+
+    if len(cleaned) >= 2 and np.allclose(cleaned[0], cleaned[-1]):
+        cleaned.pop()
+
+    # Remove repeated interior points and any collinear duplicates that would distort clipping.
+    if len(cleaned) >= 3:
+        simplified = []
+        for point in cleaned:
+            if not simplified:
+                simplified.append(point)
+                continue
+            if np.allclose(simplified[-1], point):
+                continue
+            if len(simplified) >= 2:
+                prev = simplified[-2]
+                curr = simplified[-1]
+                nxt = point
+                cross = (curr[0] - prev[0]) * (nxt[1] - prev[1]) - (curr[1] - prev[1]) * (nxt[0] - prev[0])
+                if abs(cross) < 1e-12:
+                    simplified[-1] = point
+                    continue
+            simplified.append(point)
+        cleaned = simplified
+
+    if len(cleaned) >= 2 and np.allclose(cleaned[0], cleaned[-1]):
+        cleaned.pop()
+
+    if len(cleaned) < 3:
+        return None
+
+    return np.asarray(cleaned, dtype=float)
+
+
+def _polygon_area(points):
+    """Signed polygon area for orientation normalization."""
+    if points is None or len(points) < 3:
+        return 0.0
+
+    x = points[:, 0]
+    y = points[:, 1]
+    return 0.5 * np.sum(x * np.roll(y, -1) - y * np.roll(x, -1))
+
+
+def _orient_polygon(points):
+    """Ensure the polygon is oriented counter-clockwise for clipping."""
+    area = _polygon_area(points)
+    if area < 0:
+        return points[::-1]
+    return points
+
+
+def _inside_edge(point, edge_start, edge_end):
+    """Check whether a point lies inside the clipping half-plane."""
+    cross = (edge_end[0] - edge_start[0]) * (point[1] - edge_start[1]) - (edge_end[1] - edge_start[1]) * (point[0] - edge_start[0])
+    return cross >= -1e-12
+
+
+def _point_in_polygon(point, polygon_points, include_boundary=True):
+    """Point-in-polygon test for a simple polygon."""
+    if polygon_points is None or len(polygon_points) < 3:
+        return False
+
+    x, y = point
+    polygon = np.asarray(polygon_points, dtype=float)
+    n = len(polygon)
+    inside = False
+    for i in range(n):
+        x1, y1 = polygon[i]
+        x2, y2 = polygon[(i + 1) % n]
+        if ((y1 > y) != (y2 > y)):
+            xinters = (x2 - x1) * (y - y1) / (y2 - y1) + x1
+            if x < xinters:
+                inside = not inside
+
+    if include_boundary:
+        for i in range(n):
+            x1, y1 = polygon[i]
+            x2, y2 = polygon[(i + 1) % n]
+            if abs((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) < 1e-12:
+                if min(x1, x2) - 1e-12 <= x <= max(x1, x2) + 1e-12 and min(y1, y2) - 1e-12 <= y <= max(y1, y2) + 1e-12:
+                    return True
+
+    return inside
+
+
+def _line_intersection(start, end, edge_start, edge_end):
+    """Compute the intersection of two lines."""
+    x1, y1 = start
+    x2, y2 = end
+    x3, y3 = edge_start
+    x4, y4 = edge_end
+
+    den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    if abs(den) < 1e-12:
+        return np.array([x1, y1], dtype=float)
+
+    px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den
+    py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den
+    return np.array([px, py], dtype=float)
+
+
+def _clip_polygon(subject, clipper):
+    """Clip a subject polygon by a convex clip polygon using Sutherland-Hodgman."""
+    subject_poly = _normalize_polygon(subject)
+    clip_poly = _normalize_polygon(clipper)
+    if subject_poly is None or clip_poly is None:
+        return None
+
+    clip_poly = _orient_polygon(clip_poly)
+    output = subject_poly.tolist()
+
+    for edge_idx in range(len(clip_poly)):
+        edge_start = clip_poly[edge_idx]
+        edge_end = clip_poly[(edge_idx + 1) % len(clip_poly)]
+        input_list = output
+        output = []
+
+        if not input_list:
+            break
+
+        start = input_list[-1]
+        for end in input_list:
+            start_inside = _inside_edge(start, edge_start, edge_end)
+            end_inside = _inside_edge(end, edge_start, edge_end)
+
+            if end_inside and not start_inside:
+                output.append(_line_intersection(start, end, edge_start, edge_end))
+            elif end_inside and start_inside:
+                output.append(end)
+            elif not end_inside and start_inside:
+                output.append(_line_intersection(start, end, edge_start, edge_end))
+
+            start = end
+
+    if not output:
+        return None
+
+    return np.asarray(output, dtype=float)
+
+
+def _is_polygon_within_polygon(subject, clipper):
+    """Return True when the subject polygon lies fully inside the clip polygon."""
+    if subject is None or clipper is None:
+        return False
+
+    subject_poly = _normalize_polygon(subject)
+    clip_poly = _normalize_polygon(clipper)
+    if subject_poly is None or clip_poly is None:
+        return False
+
+    # The hull supplied by SARAT is convex, so checking the rectangle corners against the hull is sufficient.
+    for point in subject_poly:
+        if not _point_in_polygon(point, clip_poly, include_boundary=True):
+            return False
+
+    return True
+
+
+def _select_cumulative_probability_cells(prob_grid, threshold=CUMULATIVE_PROBABILITY_THRESHOLD, lon_bins=None, lat_bins=None, v2_hull_points=None):
+    """Select cells by raw probability threshold for legacy callers or by cumulative-probability coverage for the new default."""
+    if prob_grid is None:
+        return None, 0.0, 0.0, 0, 0
+
+    flat = np.asarray(prob_grid, dtype=float).ravel()
+    if flat.size == 0:
+        return None, 0.0, 0.0, 0, 0
+
+    total_probability = float(np.sum(flat))
+    if total_probability <= 0:
+        return None, 0.0, 0.0, 0, 0
+
+    if threshold <= 0.5:
+        retained_mask = flat >= threshold
+        retained_mask = retained_mask.reshape(prob_grid.shape)
+        retained_prob = float(np.sum(flat[retained_mask.ravel()]))
+        return retained_mask, total_probability, retained_prob, int(flat.size), int(np.count_nonzero(retained_mask))
+
+    hull_poly = _normalize_polygon(v2_hull_points) if v2_hull_points is not None else None
+    if hull_poly is not None and lon_bins is not None and lat_bins is not None:
+        eligible_indices = []
+        for i in range(prob_grid.shape[0]):
+            for j in range(prob_grid.shape[1]):
+                lon_center = 0.5 * (float(lon_bins[j]) + float(lon_bins[j + 1]))
+                lat_center = 0.5 * (float(lat_bins[i]) + float(lat_bins[i + 1]))
+                if _point_in_polygon((lon_center, lat_center), hull_poly, include_boundary=True):
+                    eligible_indices.append(i * prob_grid.shape[1] + j)
+        if not eligible_indices:
+            return None, 0.0, 0.0, 0, 0
+        eligible_indices = np.asarray(eligible_indices, dtype=int)
+        eligible_flat = flat[eligible_indices]
+        eligible_total_probability = float(np.sum(eligible_flat))
+        if eligible_total_probability <= 0:
+            return None, 0.0, 0.0, 0, 0
+
+        order = eligible_indices[np.argsort(eligible_flat)[::-1]]
+        cumulative = 0.0
+        retained = []
+        retained_prob = 0.0
+        for idx in order:
+            prob_value = float(flat[idx])
+            retained.append(int(idx))
+            cumulative += prob_value
+            retained_prob += prob_value
+            if cumulative / eligible_total_probability >= threshold:
+                break
+    else:
+        eligible_total_probability = total_probability
+        order = np.argsort(flat)[::-1]
+        cumulative = 0.0
+        retained = []
+        retained_prob = 0.0
+        for idx in order:
+            prob_value = float(flat[idx])
+            retained.append(int(idx))
+            cumulative += prob_value
+            retained_prob += prob_value
+            if cumulative / eligible_total_probability >= threshold:
+                break
+
+    retained_mask = np.zeros_like(flat, dtype=bool)
+    retained_mask[retained] = True
+    retained_mask = retained_mask.reshape(prob_grid.shape)
+
+    return retained_mask, total_probability, retained_prob, int(flat.size), int(np.count_nonzero(retained_mask))
+
+
+def _compute_interval_bounds(prob_grid, lon_bins, lat_bins, threshold=CUMULATIVE_PROBABILITY_THRESHOLD, v2_hull_points=None):
+    """Compute the minimum axis-aligned rectangle that fully contains the retained interval cells."""
+    if prob_grid is None:
+        return None
+
+    retained_mask, total_probability, retained_prob, total_cells, retained_cells_count = _select_cumulative_probability_cells(
+        prob_grid,
+        threshold=threshold,
+        lon_bins=lon_bins,
+        lat_bins=lat_bins,
+        v2_hull_points=v2_hull_points,
+    )
+    if retained_mask is None:
+        return None
+
+    selected_cells = []
+    for i in range(prob_grid.shape[0]):
+        for j in range(prob_grid.shape[1]):
+            if retained_mask[i, j]:
+                cell_min_lon = float(lon_bins[j])
+                cell_max_lon = float(lon_bins[j + 1])
+                cell_min_lat = float(lat_bins[i])
+                cell_max_lat = float(lat_bins[i + 1])
+                selected_cells.append([cell_min_lon, cell_max_lon, cell_min_lat, cell_max_lat])
+
+    if not selected_cells:
+        return None
+
+    hull_poly = _normalize_polygon(v2_hull_points) if v2_hull_points is not None else None
+
+    candidate_xs = []
+    candidate_ys = []
+    if hull_poly is not None:
+        candidate_xs.extend([float(np.min(hull_poly[:, 0])), float(np.max(hull_poly[:, 0]))])
+        candidate_ys.extend([float(np.min(hull_poly[:, 1])), float(np.max(hull_poly[:, 1]))])
+    for cell in selected_cells:
+        min_lon, max_lon, min_lat, max_lat = cell
+        candidate_xs.extend([float(min_lon), float(max_lon)])
+        candidate_ys.extend([float(min_lat), float(max_lat)])
+
+    if not candidate_xs or not candidate_ys:
+        return None
+
+    candidate_xs = sorted(set(candidate_xs))
+    candidate_ys = sorted(set(candidate_ys))
+
+    best_rect = None
+    best_area = None
+    for i in range(len(candidate_xs)):
+        for j in range(i + 1, len(candidate_xs)):
+            x1 = candidate_xs[i]
+            x2 = candidate_xs[j]
+            if x2 <= x1:
+                continue
+            for k in range(len(candidate_ys)):
+                for l in range(k + 1, len(candidate_ys)):
+                    y1 = candidate_ys[k]
+                    y2 = candidate_ys[l]
+                    if y2 <= y1:
+                        continue
+
+                    if not all(
+                        x1 <= cell[0] and x2 >= cell[1] and y1 <= cell[2] and y2 >= cell[3]
+                        for cell in selected_cells
+                    ):
+                        continue
+
+                    rect_points = np.asarray([
+                        [x1, y1],
+                        [x2, y1],
+                        [x2, y2],
+                        [x1, y2],
+                        [x1, y1],
+                    ], dtype=float)
+
+                    if hull_poly is not None and not _is_polygon_within_polygon(rect_points, hull_poly):
+                        continue
+
+                    area = (x2 - x1) * (y2 - y1)
+                    if best_rect is None or area < best_area:
+                        best_rect = [x1, x2, y1, y2]
+                        best_area = area
+
+    if best_rect is not None:
+        return [float(best_rect[0]), float(best_rect[1]), float(best_rect[2]), float(best_rect[3])]
+
+    return None
+
+
+def _filter_prob_grid_for_footprint(prob_grid, threshold=CUMULATIVE_PROBABILITY_THRESHOLD, lon_bins=None, lat_bins=None, v2_hull_points=None):
+    """Return a boolean mask and summary stats for the retained cumulative-probability footprint."""
+    return _select_cumulative_probability_cells(
+        prob_grid,
+        threshold=threshold,
+        lon_bins=lon_bins,
+        lat_bins=lat_bins,
+        v2_hull_points=v2_hull_points,
+    )
+
+
+def _log_footprint_summary(interval_label, retained_mask, total_probability, retained_prob, total_cells, retained_cells_count):
+    """Print a concise summary for the retained footprint selection."""
+    if retained_mask is None:
+        print(f"  Interval {interval_label}: no retained footprint")
+        return
+
+    if total_probability > 0:
+        retained_percent = (retained_prob / total_probability) * 100.0
+    else:
+        retained_percent = 0.0
+
+    print(
+        f"  Interval {interval_label}: selected cells={retained_cells_count}, "
+        f"retained probability={retained_percent:.1f}%"
+    )
+
+
+def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=CUMULATIVE_PROBABILITY_THRESHOLD, max_prob_global=None, v2_hull_points=None):
     """
     Convert probability grid → FeatureCollection GeoJSON
     
@@ -53,28 +443,34 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
         except ImportError:
             pass
 
-    min_lon, max_lon = float('inf'), float('-inf')
-    min_lat, max_lat = float('inf'), float('-inf')
     points_included = 0
     max_prob = 0
     
     grid_features = []
+    retained_mask, total_probability, retained_prob, total_cells, retained_cells_count = _filter_prob_grid_for_footprint(
+        prob_grid,
+        threshold=threshold,
+        lon_bins=lon_bins,
+        lat_bins=lat_bins,
+        v2_hull_points=v2_hull_points,
+    )
+    _log_footprint_summary(interval_label, retained_mask, total_probability, retained_prob, total_cells, retained_cells_count)
+    if retained_mask is None:
+        retained_mask = np.zeros_like(prob_grid, dtype=bool)
+        total_probability = float(np.sum(prob_grid)) if prob_grid is not None else 0.0
+        retained_prob = 0.0
+        total_cells = int(np.prod(prob_grid.shape)) if prob_grid is not None else 0
+        retained_cells_count = 0
     
     for i in range(prob_grid.shape[0]):  # lat dimension
         for j in range(prob_grid.shape[1]):  # lon dimension
             prob_value = prob_grid[i][j]
             
-            if prob_value > threshold:
+            if retained_mask[i, j]:
                 cell_min_lon = lon_bins[j]
                 cell_max_lon = lon_bins[j+1]
                 cell_min_lat = lat_bins[i]
                 cell_max_lat = lat_bins[i+1]
-                
-                # Update bounding box
-                min_lon = min(min_lon, cell_min_lon)
-                max_lon = max(max_lon, cell_max_lon)
-                min_lat = min(min_lat, cell_min_lat)
-                max_lat = max(max_lat, cell_max_lat)
                 
                 points_included += 1
                 max_prob = max(max_prob, prob_value)
@@ -114,8 +510,33 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
         print(f"  ⚠️  Interval {interval_label}: 0 points above threshold - skipping rectangle")
         return None
     
-    # Compute bounding rectangle feature
+    # Compute an adaptive axis-aligned rectangle feature
     try:
+        bounds = _compute_interval_bounds(prob_grid, lon_bins, lat_bins, threshold=threshold, v2_hull_points=v2_hull_points)
+        if bounds is None:
+            if v2_hull_points is not None:
+                print(f"  ⚠️  Interval {interval_label}: no hull-constrained rectangle exists that fully contains all selected cells; skipping bounding box")
+            else:
+                print(f"  ⚠️  Interval {interval_label}: no enclosing rectangle found; skipping bounding box")
+            features = grid_features
+            geojson = {
+                "type": "FeatureCollection",
+                "properties": {
+                    "interval": interval_label,
+                    "points_included": points_included,
+                    "max_probability": round(float(max_prob), 4),
+                    "total_probability": round(float(total_probability), 6),
+                    "retained_probability": round(float(retained_prob), 6),
+                    "retained_probability_percent": round(float(retained_prob / total_probability * 100.0) if total_probability > 0 else 0.0, 2),
+                    "total_cells": int(total_cells),
+                    "retained_cells": int(retained_cells_count),
+                    "bbox_status": "skipped"
+                },
+                "features": features
+            }
+            return geojson
+
+        min_lon, max_lon, min_lat, max_lat = bounds
         polygon_coords = [
             [round_coord(min_lon), round_coord(min_lat)],
             [round_coord(max_lon), round_coord(min_lat)],
@@ -149,7 +570,12 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
             "properties": {
                 "interval": interval_label,
                 "points_included": points_included,
-                "max_probability": round(float(max_prob), 4)
+                "max_probability": round(float(max_prob), 4),
+                "total_probability": round(float(total_probability), 6),
+                "retained_probability": round(float(retained_prob), 6),
+                "retained_probability_percent": round(float(retained_prob / total_probability * 100.0) if total_probability > 0 else 0.0, 2),
+                "total_cells": int(total_cells),
+                "retained_cells": int(retained_cells_count)
             },
             "features": features
         }
@@ -161,7 +587,7 @@ def create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
         return None
 
 
-def create_grid_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=0.05):
+def create_grid_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold=CUMULATIVE_PROBABILITY_THRESHOLD):
     """
     Convert probability grid → individual grid cell polygons FeatureCollection GeoJSON
     
@@ -189,6 +615,20 @@ def create_grid_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
     
     features = []
     
+    retained_mask, total_probability, retained_prob, total_cells, retained_cells_count = _filter_prob_grid_for_footprint(
+        prob_grid,
+        threshold=threshold,
+        lon_bins=lon_bins,
+        lat_bins=lat_bins,
+        v2_hull_points=None,
+    )
+    if retained_mask is None:
+        retained_mask = np.zeros_like(prob_grid, dtype=bool)
+        total_probability = float(np.sum(prob_grid)) if prob_grid is not None else 0.0
+        retained_prob = 0.0
+        total_cells = int(np.prod(prob_grid.shape)) if prob_grid is not None else 0
+        retained_cells_count = 0
+
     # Calculate max probability for normalization
     max_prob = np.max(prob_grid) if np.max(prob_grid) > 0 else 1.0
     
@@ -199,8 +639,8 @@ def create_grid_geojson(prob_grid, lon_bins, lat_bins, interval_label, threshold
             # Normalize probability (0–1 scale)
             norm_prob = prob / max_prob if max_prob > 0 else 0
             
-            # Filter weak noise - only include cells above threshold
-            if norm_prob < threshold:
+            # Use cumulative-probability footprint selection instead of a fixed normalized threshold
+            if not retained_mask[i, j]:
                 continue
             
             # Get grid cell boundaries
@@ -356,7 +796,7 @@ def create_geojson_index(geojson_files, intervals, case_id):
 
 
 def create_current_vectors_json(wind_info, prob_grids, lon_bins, lat_bins, intervals, case_id,
-                                 target_arrows=12):
+                                 target_arrows=12, v2_hull_points=None):
     """
     Generate a current-vector sidecar JSON for Leaflet rendering.
     Exports structured GRIB JSON format for leaflet-velocity.
@@ -384,27 +824,14 @@ def create_current_vectors_json(wind_info, prob_grids, lon_bins, lat_bins, inter
         interval_label = f"{start:.0f}-{end:.0f}h"
 
         # ----------------------------------------------------------
-        # Derive bbox from probability grid
+        # Derive an adaptive bbox from the interval footprint
         # ----------------------------------------------------------
         bbox = {"min_lon": None, "max_lon": None, "min_lat": None, "max_lat": None}
         if idx < len(prob_grids):
             pg = prob_grids[idx]
-            threshold_abs = float(np.max(pg)) * 0.05 if pg.size > 0 else 0
-            for i in range(pg.shape[0]):
-                for j in range(pg.shape[1]):
-                    if pg[i, j] > threshold_abs:
-                        lo = float(lon_bins[j])
-                        hi_lo = float(lon_bins[j + 1])
-                        la = float(lat_bins[i])
-                        hi_la = float(lat_bins[i + 1])
-                        if bbox["min_lon"] is None or lo < bbox["min_lon"]:
-                            bbox["min_lon"] = lo
-                        if bbox["max_lon"] is None or hi_lo > bbox["max_lon"]:
-                            bbox["max_lon"] = hi_lo
-                        if bbox["min_lat"] is None or la < bbox["min_lat"]:
-                            bbox["min_lat"] = la
-                        if bbox["max_lat"] is None or hi_la > bbox["max_lat"]:
-                            bbox["max_lat"] = hi_la
+            bounds = _compute_interval_bounds(pg, lon_bins, lat_bins, threshold=CUMULATIVE_PROBABILITY_THRESHOLD, v2_hull_points=v2_hull_points)
+            if bounds is not None:
+                bbox["min_lon"], bbox["max_lon"], bbox["min_lat"], bbox["max_lat"] = bounds
 
         velocity_grib = None
         lkp_speed = None

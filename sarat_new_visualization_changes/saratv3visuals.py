@@ -191,7 +191,14 @@ else:
 print("\n✔ Starting GeoJSON generation...")
 print(f"  Processing {len(prob_grids)} intervals...")
 
-from geojson_utils import create_grid_geojson, create_hull_geojson, save_geojson, create_geojson_index
+from geojson_utils import create_grid_geojson, create_hull_geojson, save_geojson, create_geojson_index, load_hull_points_from_file
+
+hull_path = os.path.join(inputpath, f"finalconvexhull_{id_number}.dat")
+v2_hull_points = load_hull_points_from_file(hull_path)
+if v2_hull_points is not None:
+    print(f"  Loaded V2 hull geometry from {hull_path}")
+else:
+    print(f"  No V2 hull geometry loaded from {hull_path}")
 
 # Generate GeoJSON for each interval with BOTH hull boundary and grid heatmap
 geojson_filenames = []
@@ -202,7 +209,13 @@ for interval_idx, prob_grid in enumerate(prob_grids):
     print(f"  Interval {interval_idx} ({interval_label}): max probability = {max_prob_in_grid:.6f}")
     
     # Create BOTH layers: boundary hull and grid heatmap
-    hull_geojson = create_hull_geojson(prob_grid, lon_bins, lat_bins, interval_label)
+    hull_geojson = create_hull_geojson(
+        prob_grid,
+        lon_bins,
+        lat_bins,
+        interval_label,
+        v2_hull_points=v2_hull_points,
+    )
     grid_geojson = create_grid_geojson(prob_grid, lon_bins, lat_bins, interval_label)
     
     # Combine both into single FeatureCollection
@@ -249,7 +262,8 @@ cv_data = create_current_vectors_json(
     lat_bins   = lat_bins,
     intervals  = intervals,
     case_id    = id_number,
-    target_arrows = 12
+    target_arrows = 12,
+    v2_hull_points=v2_hull_points,
 )
 cv_filepath = os.path.join(inputpath, f"current_vectors_{id_number}.json")
 save_geojson(cv_data, cv_filepath)

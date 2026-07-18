@@ -1,0 +1,112 @@
+{
+  "version": "1.0",
+  "case_id": "6687",
+  "generated": "2026-07-18T14:44:19.722648",
+  "intervals": [
+    {
+      "interval_idx": 0,
+      "interval_label": "0-12h",
+      "start_h": 0,
+      "end_h": 12,
+      "bbox": {
+        "min_lon": null,
+        "max_lon": null,
+        "min_lat": null,
+        "max_lat": null
+      },
+      "lkp_speed_ms": null,
+      "valid": false,
+      "velocity_grib": null
+    },
+    {
+      "interval_idx": 1,
+      "interval_label": "12-24h",
+      "start_h": 12,
+      "end_h": 24,
+      "bbox": {
+        "min_lon": null,
+        "max_lon": null,
+        "min_lat": null,
+        "max_lat": null
+      },
+      "lkp_speed_ms": null,
+      "valid": false,
+      "velocity_grib": null
+    },
+    {
+      "interval_idx": 2,
+      "interval_label": "24-36h",
+      "start_h": 24,
+      "end_h": 36,
+      "bbox": {
+        "min_lon": null,
+        "max_lon": null,
+        "min_lat": null,
+        "max_lat": null
+      },
+      "lkp_speed_ms": null,
+      "valid": false,
+      "velocity_grib": null
+    },
+    {
+      "interval_idx": 3,
+      "interval_label": "36-48h",
+      "start_h": 36,
+      "end_h": 48,
+      "bbox": {
+        "min_lon": null,
+        "max_lon": null,
+        "min_lat": null,
+        "max_lat": null
+      },
+      "lkp_speed_ms": null,
+      "valid": false,
+      "velocity_grib": null
+    },
+    {
+      "interval_idx": 4,
+      "interval_label": "48-60h",
+      "start_h": 48,
+      "end_h": 60,
+      "bbox": {
+        "min_lon": null,
+        "max_lon": null,
+        "min_lat": null,
+        "max_lat": null
+      },
+      "lkp_speed_ms": null,
+      "valid": false,
+      "velocity_grib": null
+    },
+    {
+      "interval_idx": 5,
+      "interval_label": "60-72h",
+      "start_h": 60,
+      "end_h": 72,
+      "bbox": {
+        "min_lon": null,
+        "max_lon": null,
+        "min_lat": null,
+        "max_lat": null
+      },
+      "lkp_speed_ms": null,
+      "valid": false,
+      "velocity_grib": null
+    },
+    {
+      "interval_idx": 6,
+      "interval_label": "72-75h",
+      "start_h": 72,
+      "end_h": 75,
+      "bbox": {
+        "min_lon": null,
+        "max_lon": null,
+        "min_lat": null,
+        "max_lat": null
+      },
+      "lkp_speed_ms": null,
+      "valid": false,
+      "velocity_grib": null
+    }
+  ]
+}

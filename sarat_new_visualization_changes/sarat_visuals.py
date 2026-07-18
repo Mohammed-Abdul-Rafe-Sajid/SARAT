@@ -283,7 +283,7 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
     """
     import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize
-    from matplotlib.cm import get_cmap
+    from matplotlib import cm
     from matplotlib.patches import Rectangle
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -301,7 +301,7 @@ def plot_individual(output_path,intervals, trajectories, centroids, ds_hourly,
     lon_ticks = np.arange(np.ceil(min_lon), np.floor(max_lon) + 1)
     lat_ticks = np.arange(np.ceil(min_lat), np.floor(max_lat) + 1)
     
-    cmap = get_cmap("PuBuGn")#fixing the colormap
+    cmap = cm.get_cmap("PuBuGn")
 
     if plot_individual:
         for idx, (start, end) in enumerate(intervals):
@@ -459,7 +459,7 @@ def plot_combined(output_path,id_number,intervals, trajectories, centroids, ds_h
     
     import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize
-    from matplotlib.cm import get_cmap
+    from matplotlib import cm
     from matplotlib.patches import Rectangle
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
@@ -476,7 +476,7 @@ def plot_combined(output_path,id_number,intervals, trajectories, centroids, ds_h
     lon_ticks = np.arange(np.ceil(min_lon), np.floor(max_lon) + 1)
     lat_ticks = np.arange(np.ceil(min_lat), np.floor(max_lat) + 1)
     
-    cmap = get_cmap("PuBuGn")
+    cmap = cm.get_cmap("PuBuGn")
     # --- 2x2 PAGINATED COMBINED PLOT ---
     # Each page shows exactly 4 subplots in a 2x2 grid.
     # If intervals > 4, extra intervals overflow onto subsequent pages.
